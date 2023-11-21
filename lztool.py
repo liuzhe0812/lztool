@@ -3,15 +3,14 @@
 __authur__ = u'liuzhe'
 __version__ = '4.0'
 
-import logging, wx.grid, sys,os,configparser
-import wx.grid
+import logging, wx.grid, sys,os,configparser,wx.grid,wx.aui
 import module.widgets.rectshapedbitmapbuttonTwo as SBBTwo
-import wx.aui
 from module import panels,ssh_panel,cloud_panel
 from module.myui import *
 from webssh import wssh
 from module import methods
 from module.dialogs import config_dlg
+from module.dialogs import file_edit as LOGEDIT
 
 
 class MyTitleBar(wx.Control):
@@ -604,7 +603,6 @@ class Myframe(wx.Frame):
             self.config.write(open('config.ini', "w"))
         dlg.Destroy()
 
-from module.dialogs import file_edit as LOGEDIT
 
 class LogFrame(LOGEDIT):
     def __init__(self):

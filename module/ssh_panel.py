@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import logging,shutil
+import logging,shutil,winreg
 import threadpool, wx.grid, wx.aui, pyperclip, base64,  stat,configparser,os,re
 from _thread import start_new_thread
 from .myui import *
@@ -11,13 +11,16 @@ from module.methods import getLabelFromEVT, bytes2human
 from module.widgets import sshNotebook as SNB
 import wx.lib.agw.flatnotebook as FNB
 
-backends = [wx.html2.WebViewBackendEdge,wx.html2.WebViewBackendIE]
+backends = [wx.html2.WebViewBackendEdge, wx.html2.WebViewBackendIE]
 BACKEND = None
 for id in backends:
     if WebView.IsBackendAvailable(id) and BACKEND is None:
         if id == wx.html2.WebViewBackendIE:
+            key_path = r"Software\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BROWSER_EMULATION"
+            methods.check_and_create_registry_key(key_path, 'lztool.exe', 11000)
             WebView.MSWSetEmulationLevel(wx.html2.WEBVIEWIE_EMU_IE11)
         BACKEND = id
+
 
 class ssh_panel(wx.Panel):
     def __init__(self, parent):

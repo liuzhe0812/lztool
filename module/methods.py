@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 import threading,configparser,winreg,os,codecs
 
 
@@ -137,3 +138,18 @@ def is_utf8(s):
         return True
     except UnicodeDecodeError:
         return False
+
+def check_and_create_registry_key(key_path,key_name=None,value=None):
+    try:
+        # 尝试打开注册表项
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ)
+        winreg.CloseKey(key)
+    except:
+        # 如果注册表项不存在，则创建它
+        try:
+            key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
+            winreg.SetValueEx(key, key_name, 0, winreg.REG_DWORD, value)
+            winreg.CloseKey(key)
+        except Exception as e:
+            logging.ERROR(e)
+
