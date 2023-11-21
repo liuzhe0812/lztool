@@ -1,0 +1,2 @@
+echo 'test' > aaa
+cp aaa bbb
