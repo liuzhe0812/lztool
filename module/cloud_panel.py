@@ -234,8 +234,8 @@ class vdi_server_panel(wx.Panel):
         item = evt.GetEventObject()
         conn = item.Parent.conn
         dlg = wx.Frame(self)
-        dlg.__init__(None, -1, title="connect to %s" % conn.host, size=(800, 600),
-                     style=wx.DEFAULT_FRAME_STYLE | wx.DIALOG_NO_PARENT)
+        dlg.__init__(None, -1, title="connect to %s" % conn.host, size=(800, 600))
+        dlg.SetIcon(wx.Icon('bitmaps/console.png'))
         p = server_shell_panel(dlg, conn)
         bsizer = wx.BoxSizer(wx.VERTICAL)
         bsizer.Add(p, 1, wx.EXPAND)

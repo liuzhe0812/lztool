@@ -442,7 +442,8 @@ class IndexHandler(MixinHandler, tornado.web.RequestHandler):
     def ssh_connect(self, args):
         "args:('172.31.13.51', 22, 'Cloud_r00t', 'Vdi&Voi@r00t', None)"
         dst_addr = args[:2]
-        if not globals.multi_ssh_conn[args[0]].console:
+
+        if args[0] in globals.multi_ssh_conn and not globals.multi_ssh_conn[args[0]].console:
             # 不是复制，直接使用批量对象中的channel
             globals.multi_ssh_conn[args[0]].console = True
             ssh = globals.multi_ssh_conn[args[0]].ssh

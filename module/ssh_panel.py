@@ -138,8 +138,8 @@ class ssh_panel(wx.Panel):
                                                     | SNB.FNB_NO_TAB_FOCUS
                                                     | SNB.FNB_X_ON_TAB
                                                     | SNB.FNB_OPEN_BUTTON
-                                                    | SNB.FNB_MENU_BUTTON
-                                                    | FNB.FNB_ALLOW_FOREIGN_DND)
+                                                    | SNB.FNB_MENU_BUTTON)
+                                                    # | FNB.FNB_ALLOW_FOREIGN_DND)
         self.nb_console.SetTabAreaColour(globals.panel_bgcolor)
         self.nb_console.SetTabAreaColour(wx.Colour(237, 239, 242))
 
@@ -165,7 +165,6 @@ class ssh_panel(wx.Panel):
         self.tree_session.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.on_tree_item_actived)
         self.Bind(SNB.EVT_FLATNOTEBOOK_PAGE_CHANGED, self.onNotebookChange, self.nb_console)
         self.Bind(SNB.EVT_FLATNOTEBOOK_PAGE_CLOSING, self.onNotebookPageClose, self.nb_console)
-        # self.Bind(SNB.EVT_FLATNOTEBOOK_PAGE_DROPPED, self.onNotebookPageDrop, self.nb_console)
         self.ssh_menu.bt_open.Bind(wx.EVT_BUTTON, self.onOpenDownloadDir)
         self.ssh_menu.bt_cancel.Bind(wx.EVT_BUTTON, self.onSFTPCancel)
 
@@ -212,6 +211,7 @@ class ssh_panel(wx.Panel):
             self.set_cur_conn(self.nb_console.GetPage(self.nb_console.GetSelection()).conn)
 
     def onNotebookPageClose(self, evt):
+        "delele page触发，delete all page不触发"
         self._PageCount -= 1
         label = self.nb_console.GetPageText(evt.GetSelection())
 
@@ -223,8 +223,6 @@ class ssh_panel(wx.Panel):
         if self._PageCount == 0 and not self.is_conecting:
             self.add_default_page()
 
-    def onNotebookPageDrop(self,evt):
-        print('drop')
 
     def CreateRightClickMenu(self):
         self.nb_console_rmenu = wx.Menu()
@@ -314,6 +312,7 @@ class ssh_panel(wx.Panel):
     def create_connect(self, evt):
         info = self.get_ssh_info()
         self.start_connect(info)
+        self.nb_console.DeleteAllPages()
 
     def start_connect(self, info):
         num, host, port, user, password, name, desc = info
@@ -408,8 +407,6 @@ class ssh_panel(wx.Panel):
             self.done = 0
             self.total = 0
             if self.link_ok > 0:
-                self.nb_console.DeleteAllPages()
-                self._PageCount = 0
                 wx.CallAfter(self.add_shell_page, (globals.cur_conn))
                 self.is_conecting = False
                 self.Layout()
@@ -458,6 +455,7 @@ class ssh_panel(wx.Panel):
                 self.close_all_ssh(None)
             else:
                 wx.CallAfter(self.st_session_count.SetLabel, str(self.link_ok))
+
 
     def set_cur_conn(self, conn):
         globals.cur_conn = conn
@@ -574,7 +572,7 @@ class shell_panel(wx.SplitterWindow):
         self.nb_console_operate.SetTabAreaColour(globals.panel_bgcolor)
 
         self.SetMinimumPaneSize(200)
-        self.SplitHorizontally(self.browser, self.nb_console_operate, -250)
+        self.SplitHorizontally(self.browser, self.nb_console_operate, -200)
         self.SetSashGravity(1)
 
         self.refresh()
@@ -642,8 +640,8 @@ class CopyPage(wx.Panel):
         if self.conn:
             passwd_base64 = base64.b64encode(self.conn.password.encode('utf8'))
             passwd_base64 = passwd_base64.decode('utf8')
-            url = "http://127.0.0.1:%s/?hostname=%s&username=root&password=%s" % (
-                globals.wssh_port, self.conn.host, passwd_base64)
+            url = "http://127.0.0.1:%s/?hostname=%s&username=%s&password=%s" % (
+                globals.wssh_port, self.conn.host, self.conn.username,passwd_base64)
         else:
             url = "http://127.0.0.1:%s" % globals.wssh_port
         self.browser.LoadURL(url)
