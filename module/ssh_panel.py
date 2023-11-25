@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
-import logging,shutil,winreg
-import threadpool, wx.grid, wx.aui, pyperclip, base64,  stat,configparser,os,re
+import logging, shutil, winreg
+import threadpool, wx.grid, wx.aui, pyperclip, base64, stat, configparser, os, re
 from _thread import start_new_thread
 from .myui import *
 from functools import reduce
-from module import methods, dialogs, globals,ssh
+from module import methods, dialogs, globals, ssh
 from wx.html2 import WebView
 from module.dialogs import add_cmd_dlg, file_chmod, file_edit, file_choice, sshclient_list
 from module.methods import getLabelFromEVT, bytes2human
-from module.widgets import sshNotebook as SNB
 import wx.lib.agw.flatnotebook as FNB
+from module.widgets import auiNotebook as ANB
+import wx.lib.agw.aui as aui
 
 backends = [wx.html2.WebViewBackendEdge, wx.html2.WebViewBackendIE]
 BACKEND = None
@@ -21,13 +22,14 @@ for id in backends:
             WebView.MSWSetEmulationLevel(wx.html2.WEBVIEWIE_EMU_IE11)
         BACKEND = id
 
+AUI_BUTTON_ADD = 201
+AUI_BUTTON_FILETRANSFER = 202
 
 class ssh_panel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
         self.new_thread = methods.new_thread
         self.link_ok = 0  # 连接成功数
-        self._PageCount = 0
         self._IsMulti = True
         self.sftp_status = False
         self.is_conecting = False  # 用来处理default page
@@ -74,7 +76,6 @@ class ssh_panel(wx.Panel):
         self.host.SetValue(sshconfig.get('default', 'host'))
         self.username.SetValue(sshconfig.get('default', 'user'))
         self.password.SetValue(sshconfig.get('default', 'password'))
-
 
         bSizerInfo.Add(info_label, 0, wx.EXPAND, 0)
         bSizerInfo.Add(self.num, 0, wx.EXPAND | wx.TOP, 1)
@@ -132,21 +133,17 @@ class ssh_panel(wx.Panel):
         bSizer1.Add(bSizer11, 0, wx.EXPAND)
         bSizer1.Add(bSizer12, 1, wx.EXPAND)
 
-        self.nb_console = SNB.FlatNotebook(self, wx.ID_ANY,
-                                           agwStyle=SNB.FNB_FANCY_TABS
-                                                    | SNB.FNB_NO_X_BUTTON
-                                                    | SNB.FNB_NO_TAB_FOCUS
-                                                    | SNB.FNB_X_ON_TAB
-                                                    | SNB.FNB_OPEN_BUTTON
-                                                    | SNB.FNB_MENU_BUTTON)
-                                                    # | FNB.FNB_ALLOW_FOREIGN_DND)
-        self.nb_console.SetTabAreaColour(globals.panel_bgcolor)
-        self.nb_console.SetTabAreaColour(wx.Colour(237, 239, 242))
+
+        self.nb_console = ANB.auiNotebook(parent=self)
+        self.nb_console.tab_context_menu = {'txt': ['复制', '关闭其他'], 'method': self.onNotebookTabMenu}
+        # self.nb_console.set_tab_context_menu(tab_ctrl, tab_menu, self.onNotebookTabMenu)
+        # self.nb_console.set_tab_context_menu(tab_ctrl, tab_menu, self.onNotebookTabMenu)
+        self.nb_console.addTabButtons(AUI_BUTTON_ADD, wx.LEFT,wx.Bitmap('bitmaps/add_console.png', wx.BITMAP_TYPE_PNG),self.onTabButtonAdd)
+        self.nb_console.addTabButtons(AUI_BUTTON_FILETRANSFER, wx.RIGHT, wx.Bitmap('bitmaps/ssh_menu.png', wx.BITMAP_TYPE_PNG),self.onTabButtonSSHMenu)
 
         self.ssh_menu = SSHPopupWindow(self, wx.SIMPLE_BORDER)
         self.ssh_menu.st_path.SetLabel(methods.get_config('ssh', 'download_path'))
 
-        self.CreateRightClickMenu()
         self.add_default_page()
 
         bSizer2.Add(self.nb_console, 1, wx.EXPAND | wx.RIGHT | wx.LEFT, 5)
@@ -163,10 +160,11 @@ class ssh_panel(wx.Panel):
         self.tree_session.Bind(wx.EVT_TREE_SEL_CHANGED, self.on_tree_sel)
         self.tree_session.Bind(wx.EVT_TREE_ITEM_RIGHT_CLICK, self.on_tree_rightclick)
         self.tree_session.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.on_tree_item_actived)
-        self.Bind(SNB.EVT_FLATNOTEBOOK_PAGE_CHANGED, self.onNotebookChange, self.nb_console)
-        self.Bind(SNB.EVT_FLATNOTEBOOK_PAGE_CLOSING, self.onNotebookPageClose, self.nb_console)
+        self.Bind(aui.EVT_AUINOTEBOOK_PAGE_CHANGED, self.onNotebookChange, self.nb_console)
+        self.Bind(aui.EVT_AUINOTEBOOK_PAGE_CLOSED, self.onNotebookPageClose, self.nb_console)
         self.ssh_menu.bt_open.Bind(wx.EVT_BUTTON, self.onOpenDownloadDir)
         self.ssh_menu.bt_cancel.Bind(wx.EVT_BUTTON, self.onSFTPCancel)
+
 
     def RefreshSSHList(self, evt):
         i = 0
@@ -185,11 +183,14 @@ class ssh_panel(wx.Panel):
             wx.CallAfter(self.st_session_count.SetLabel, str(i))
 
     def ShowSSHMenu(self):
-        rect = self.nb_console._pages.GetClientRect()
-        pos = self.nb_console._pages.ClientToScreen((rect.width, 0))
+        rect = self.nb_console.GetRect()
+        pos = self.nb_console.ClientToScreen((rect.width, 0))
         wid = self.ssh_menu.GetSize()[0]
         self.ssh_menu.Position(pos, (-5 - wid, 30))
         self.ssh_menu.Show(True)
+
+    # def set_shellpage_context_menu(self):
+    #     self.nb_console.set_tab_context_menu(['复制', '关闭其他'], self.onNotebookTabMenu)
 
     def onOpenDownloadDir(self, evt):
         path = self.ssh_menu.st_path.GetLabel()
@@ -206,34 +207,56 @@ class ssh_panel(wx.Panel):
             self.name.tc.Disable()
             self.desc.tc.Disable()
 
+    def onTabButtonAdd(self):
+        self.add_default_page()
+
+    def onTabButtonSSHMenu(self):
+        self.ShowSSHMenu()
+
     def onNotebookChange(self, evt):
         if self.nb_console.GetPage(self.nb_console.GetSelection()).conn:
             self.set_cur_conn(self.nb_console.GetPage(self.nb_console.GetSelection()).conn)
 
     def onNotebookPageClose(self, evt):
-        "delele page触发，delete all page不触发"
-        self._PageCount -= 1
+        '点x时触发，事件完成后才调用DeletePage()，除此之外其他情况不添加default page'
         label = self.nb_console.GetPageText(evt.GetSelection())
-
-        if label in globals.multi_ssh_conn.keys():  # 不是复制的页面
-            globals.multi_ssh_conn[label].console = False
-            self.shellpage_dic[label].nb_console_operate.MONITER_STAT = False  #停止监控线程
-            self.shellpage_dic.pop(label)
-
-        if self._PageCount == 0 and not self.is_conecting:
+        self.deletePageData(label)
+        if self.nb_console._PageCount == 1:
             self.add_default_page()
 
+    def DeleteAllPages(self,default_page=True):
+        self.nb_console.Freeze()
+        while self.nb_console._PageCount:
+            self.nb_console.DeletePage(0)
+            self.deletePageData(self.nb_console.GetPageText(0))
+        if default_page:
+            self.add_default_page()
 
-    def CreateRightClickMenu(self):
-        self.nb_console_rmenu = wx.Menu()
-        for text in '复制 关闭其他'.split():
-            item = self.nb_console_rmenu.Append(wx.ID_ANY, text)
-            self.Bind(wx.EVT_MENU, self.onNotebookTabMenu, item)
-        self.nb_console.SetRightClickMenu(self.nb_console_rmenu)
+        self.nb_console.Thaw()
+
+    def deletePageData(self,page_label):
+        '处理page相关线程和dict'
+        if page_label in globals.multi_ssh_conn.keys():  # 不是复制的页面
+            globals.multi_ssh_conn[page_label].console = False
+            self.shellpage_dic[page_label].nb_console_operate.MONITER_STAT = False  # 停止监控线程
+            self.shellpage_dic.pop(page_label)
+
+    def close_all_ssh(self, evt):
+        self.DeleteAllPages(True)
+        self.shellpage_dic.clear()
+        self.treeNode_dict.clear()
+        globals.multi_ssh_conn.clear()
+        self.tree_session.root = None
+        self.tree_session.DeleteAllItems()
+        self.change_online_count(None)
+        self.panel11.Show()
+        self.panel12.Hide()
+        self.Layout()
 
     def onNotebookTabMenu(self, evt):
-        item = self.nb_console_rmenu.FindItemById(evt.GetId())
-        label = item.GetItemLabel()
+        menu = evt.GetEventObject()
+        selected_item = menu.FindItemById(evt.GetId())
+        label = selected_item.GetItemLabel()
         if label == '复制':
             conn = self.nb_console.GetCurrentPage().conn
             if conn:
@@ -258,9 +281,9 @@ class ssh_panel(wx.Panel):
         else:
             new_page = CopyPage(self.nb_console, conn)
         self.nb_console.AddPage(new_page, label, True)
-        self._PageCount += 1
+        self.nb_console._PageCount += 1
 
-    def get_copy_increate_label(self,ip):
+    def get_copy_increate_label(self, ip):
         all_labels = [self.nb_console.GetPageText(i) for i in range(self.nb_console.GetPageCount())]
         filtered_labels = [label for label in all_labels if label.startswith(ip)]
         existing_numbers = [int(re.search(r'%s-(\d+)' % ip, s).group(1)) for s in filtered_labels if
@@ -272,10 +295,12 @@ class ssh_panel(wx.Panel):
         return new_string
 
     def add_default_page(self):
+        self.nb_console.Freeze()
         page = DeafaultPage(self.nb_console)
         self.nb_console.AddPage(page, '新标签页', True)
         page.listCtrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_linklist_act)
-        self._PageCount += 1
+        self.nb_console._PageCount += 1
+        self.nb_console.Thaw()
 
     # 连接动画效果
     def connect_ui(self, movetask=True):
@@ -312,7 +337,7 @@ class ssh_panel(wx.Panel):
     def create_connect(self, evt):
         info = self.get_ssh_info()
         self.start_connect(info)
-        self.nb_console.DeleteAllPages()
+        self.DeleteAllPages(False)
 
     def start_connect(self, info):
         num, host, port, user, password, name, desc = info
@@ -413,7 +438,6 @@ class ssh_panel(wx.Panel):
             else:
                 self.close_all_ssh(None)
 
-
     def open_connect(self):
         dlg = dialogs.open_connect()
         dlg.listCtrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_linklist_act)
@@ -430,21 +454,6 @@ class ssh_panel(wx.Panel):
         if isinstance(parent, wx.Dialog):
             parent.Destroy()
 
-    def close_all_ssh(self, evt):
-        self._PageCount = 0
-        self.nb_console.DeleteAllPages()  # 前两行顺序不能乱
-        wx.CallAfter(self.add_default_page)
-        self.shellpage_dic.clear()
-        self.treeNode_dict.clear()
-        globals.multi_ssh_conn.clear()
-        self.tree_session.root = None
-        self.tree_session.DeleteAllItems()
-        self.change_online_count(None)
-        self.panel11.Show()
-        self.panel12.Hide()
-        self.Layout()
-        # globals.console_dict.clear()
-
     def change_online_count(self, n):
         if n == None:
             self.link_ok = 0
@@ -455,7 +464,6 @@ class ssh_panel(wx.Panel):
                 self.close_all_ssh(None)
             else:
                 wx.CallAfter(self.st_session_count.SetLabel, str(self.link_ok))
-
 
     def set_cur_conn(self, conn):
         globals.cur_conn = conn
@@ -562,11 +570,11 @@ class ssh_panel(wx.Panel):
 # shell界面分割窗
 class shell_panel(wx.SplitterWindow):
     def __init__(self, parent, conn):
-        wx.SplitterWindow.__init__(self,parent=parent, size=(256, -1), style=wx.SP_NOBORDER | wx.TAB_TRAVERSAL)
+        wx.SplitterWindow.__init__(self, parent=parent, size=(256, -1), style=wx.SP_NOBORDER | wx.TAB_TRAVERSAL)
         self.conn = conn
         self.SetBackgroundColour(globals.bgcolor)
 
-        self.browser = WebView.New(self,backend=BACKEND)
+        self.browser = WebView.New(self, backend=BACKEND)
 
         self.nb_console_operate = shell_notebook(self, self.conn)
         self.nb_console_operate.SetTabAreaColour(globals.panel_bgcolor)
@@ -586,6 +594,7 @@ class shell_panel(wx.SplitterWindow):
         else:
             url = "http://127.0.0.1:%s" % globals.wssh_port
         self.browser.LoadURL(url)
+
 
 class DeafaultPage(wx.Panel):
 
@@ -629,7 +638,7 @@ class CopyPage(wx.Panel):
         self.conn = conn
         self.SetBackgroundColour(globals.bgcolor)
 
-        self.browser = WebView.New(self,backend=BACKEND)
+        self.browser = WebView.New(self, backend=BACKEND)
         bsizer = wx.BoxSizer(wx.VERTICAL)
         bsizer.Add(self.browser, 1, wx.EXPAND)
 
@@ -641,16 +650,17 @@ class CopyPage(wx.Panel):
             passwd_base64 = base64.b64encode(self.conn.password.encode('utf8'))
             passwd_base64 = passwd_base64.decode('utf8')
             url = "http://127.0.0.1:%s/?hostname=%s&username=%s&password=%s" % (
-                globals.wssh_port, self.conn.host, self.conn.username,passwd_base64)
+                globals.wssh_port, self.conn.host, self.conn.username, passwd_base64)
         else:
             url = "http://127.0.0.1:%s" % globals.wssh_port
         self.browser.LoadURL(url)
 
+
 class shell_notebook(FNB.FlatNotebook):
     def __init__(self, parent, conn):
-        FNB.FlatNotebook.__init__(self, parent=parent,  agwStyle=FNB.FNB_NODRAG | FNB.FNB_FF2
-                                                                    | FNB.FNB_NO_X_BUTTON
-                                                                    | FNB.FNB_NO_TAB_FOCUS)
+        FNB.FlatNotebook.__init__(self, parent=parent, agwStyle=FNB.FNB_NODRAG | FNB.FNB_FF2
+                                                                | FNB.FNB_NO_X_BUTTON
+                                                                | FNB.FNB_NO_TAB_FOCUS)
         self.ssh_panel = parent.Parent.Parent
         self.conn = conn
         self.cmd_on_sel = None
@@ -848,7 +858,7 @@ class shell_notebook(FNB.FlatNotebook):
             if os.path.isdir(cur_path):
                 self.refreshUploadList(cur_path, remote, path_map)
             else:
-                if os.path.getsize(cur_path)==0:
+                if os.path.getsize(cur_path) == 0:
                     continue
                 else:
                     remote_path = remote + '/' + file
@@ -913,7 +923,7 @@ class shell_notebook(FNB.FlatNotebook):
                 continue
             remoteFileName = klass.filepath
             remote_son_dir = '/'.join(remoteFileName.split('/')[0:-1])
-            son_dir = '/'+re.sub(basic_path,'',remote_son_dir)
+            son_dir = '/' + re.sub(basic_path, '', remote_son_dir)
             localFileName = os.path.join(local + son_dir, remoteFileName.split('/')[-1])
             if not os.path.exists(local + son_dir):
                 os.makedirs(local + son_dir)
@@ -922,7 +932,7 @@ class shell_notebook(FNB.FlatNotebook):
                 self.last_transferred = 0
                 self.transfer_rate = '0K'
                 self.sftp.get(remoteFileName, localFileName, callback=self.callback)
-                if self.getRemoteFileSize(self.sftp, remoteFileName)== 0:
+                if self.getRemoteFileSize(self.sftp, remoteFileName) == 0:
                     klass.progress = 100
                     klass.done = '已完成'
                     wx.CallAfter(self.ssh_panel.ssh_menu.ulc_ssh.RefreshItem, index)
@@ -1211,16 +1221,15 @@ class shell_notebook(FNB.FlatNotebook):
         self.combo_keys.SetStringSelection('ctrl+c')
 
         sizer_l_bot = wx.BoxSizer(wx.HORIZONTAL)
-        sizer_l_bot.Add(txt1, 0, wx.ALIGN_CENTER|wx.LEFT,10)
+        sizer_l_bot.Add(txt1, 0, wx.ALIGN_CENTER | wx.LEFT, 10)
         sizer_l_bot.Add(self.combo, 0, wx.EXPAND | wx.LEFT, 2)
         sizer_l_bot.Add(self.bt_send, 0, wx.EXPAND)
-        sizer_l_bot.Add(self.bt_save, 0, wx.EXPAND | wx.LEFT|wx.RIGHT,5)
-        sizer_l_bot.Add((-1,0),1,wx.EXPAND)
+        sizer_l_bot.Add(self.bt_save, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
+        sizer_l_bot.Add((-1, 0), 1, wx.EXPAND)
         sizer_l_bot.Add(self.combo_keys, 0, wx.EXPAND)
-        sizer_l_bot.Add(self.bt_sendkeys, 0, wx.EXPAND|wx.RIGHT,10 )
+        sizer_l_bot.Add(self.bt_sendkeys, 0, wx.EXPAND | wx.RIGHT, 10)
 
-        # sizer_l.Add(sizer_l_bot, 0, wx.ALIGN_CENTER)
-        sizer_l.Add(sizer_l_bot, 0,wx.EXPAND)
+        sizer_l.Add(sizer_l_bot, 0, wx.EXPAND)
 
         txt3 = wx.StaticText(self.pnl_r, label='命令管理')
         txt3.SetForegroundColour(wx.Colour(100, 100, 100))
@@ -1256,7 +1265,6 @@ class shell_notebook(FNB.FlatNotebook):
         keys = self.combo_keys.GetValue()
         self.send_cmd(keys)
 
-
     def SetPnlRightPopmenu(self, evt):
         menu = wx.Menu()
         for text in self.popupmenu_text:
@@ -1277,8 +1285,8 @@ class shell_notebook(FNB.FlatNotebook):
                 self.add_cmd_bt(name)
             dlg.Destroy()
 
-    def send_cmd(self,keys=None):
-        key_value = {'ctrl+c':'\x03', 'ctrl+z':'\x1a'}
+    def send_cmd(self, keys=None):
+        key_value = {'ctrl+c': '\x03', 'ctrl+z': '\x1a'}
         self.bt_send.Disable()
         value = self.stc.GetValue()
         cmds = value.split('\n')
@@ -1462,7 +1470,8 @@ class shell_notebook(FNB.FlatNotebook):
                     swap_use_per = int(100 * swap_use / swap_tot)
                     swap_use_fit = bytes2human(swap_use, start='K')
                     swap_tot_fit = bytes2human(swap_tot, start='K')
-                    self.gauge_swap.SetValue(swap_use_per, '%s%%' % swap_use_per, '%s/%s' % (swap_use_fit, swap_tot_fit))
+                    self.gauge_swap.SetValue(swap_use_per, '%s%%' % swap_use_per,
+                                             '%s/%s' % (swap_use_fit, swap_tot_fit))
 
                 uptime = re[3].split(',')
                 self.runtime.SetLabel(uptime[0].split('up')[1])
@@ -1470,4 +1479,3 @@ class shell_notebook(FNB.FlatNotebook):
                 time.sleep(2)
             except Exception as e:
                 logging.error(e)
-

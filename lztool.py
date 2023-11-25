@@ -11,6 +11,7 @@ from webssh import wssh
 from module import methods
 from module.dialogs import config_dlg
 from module.dialogs import file_edit as LOGEDIT
+import wx.lib.agw.aui as aui
 
 
 class MyTitleBar(wx.Control):
@@ -433,7 +434,8 @@ class Myframe(wx.Frame):
                                     title="",
                                     style=style)
         # ------------
-
+        self._mgr = aui.AuiManager()
+        self._mgr.SetManagedWindow(self)
         self.SetBackgroundColour('white')
         self.opacity_out = 255
         self.deltaN = -70
