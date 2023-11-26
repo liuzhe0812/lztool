@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-import wx, wx.lib.agw.aui as aui
+# import wx, wx.lib.agw.aui as aui
+import wx, module.widgets.aui as aui
 
 NOTEBOOK_STYLE = aui.AUI_NB_DEFAULT_STYLE \
                  | aui.AUI_NB_TAB_MOVE \
@@ -19,6 +20,7 @@ class auiNotebook(aui.AuiNotebook):
         self.parent = parent
         self.tab_buttons = {}
         self.tab_context_menu = {}
+        self.active_button_tab = None
 
     def set_tab_context_menu(self):
         # 绑定右键菜单事件
@@ -50,6 +52,7 @@ class auiNotebook(aui.AuiNotebook):
 
     def OnTabButton(self, event):
         bt_id = event.GetInt()
+        self.active_button_tab = event.GetEventObject()
         if bt_id in self.tab_buttons:
             self.tab_buttons[bt_id]['method']()
         super().OnTabButton(event)
@@ -61,12 +64,11 @@ class auiNotebook(aui.AuiNotebook):
     def CreaateNewTabFrame(self):
 
         tab_ctrl = super().CreaateNewTabFrame()
-        for tb_id in self.tab_buttons.keys():
+        for tb_id in self.tab_buttons.keys():  #重建 tab frame时添加按钮
             self.addTabButtons(tb_id,
                                self.tab_buttons[tb_id]['local'],
                                self.tab_buttons[tb_id]['bitmap'],
                                self.tab_buttons[tb_id]['method'])
-        # self.set_tab_context_menu(tab_ctrl)
         return tab_ctrl
 
     def OnTabRightDown(self,event):

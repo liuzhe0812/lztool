@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import logging, shutil, winreg
+import logging, shutil
 import threadpool, wx.grid, wx.aui, pyperclip, base64, stat, configparser, os, re
 from _thread import start_new_thread
 from .myui import *
@@ -10,7 +10,7 @@ from module.dialogs import add_cmd_dlg, file_chmod, file_edit, file_choice, sshc
 from module.methods import getLabelFromEVT, bytes2human
 import wx.lib.agw.flatnotebook as FNB
 from module.widgets import auiNotebook as ANB
-import wx.lib.agw.aui as aui
+import module.widgets.aui as aui
 
 backends = [wx.html2.WebViewBackendEdge, wx.html2.WebViewBackendIE]
 BACKEND = None
@@ -136,8 +136,6 @@ class ssh_panel(wx.Panel):
 
         self.nb_console = ANB.auiNotebook(parent=self)
         self.nb_console.tab_context_menu = {'txt': ['复制', '关闭其他'], 'method': self.onNotebookTabMenu}
-        # self.nb_console.set_tab_context_menu(tab_ctrl, tab_menu, self.onNotebookTabMenu)
-        # self.nb_console.set_tab_context_menu(tab_ctrl, tab_menu, self.onNotebookTabMenu)
         self.nb_console.addTabButtons(AUI_BUTTON_ADD, wx.LEFT,wx.Bitmap('bitmaps/add_console.png', wx.BITMAP_TYPE_PNG),self.onTabButtonAdd)
         self.nb_console.addTabButtons(AUI_BUTTON_FILETRANSFER, wx.RIGHT, wx.Bitmap('bitmaps/ssh_menu.png', wx.BITMAP_TYPE_PNG),self.onTabButtonSSHMenu)
 
@@ -189,9 +187,6 @@ class ssh_panel(wx.Panel):
         self.ssh_menu.Position(pos, (-5 - wid, 30))
         self.ssh_menu.Show(True)
 
-    # def set_shellpage_context_menu(self):
-    #     self.nb_console.set_tab_context_menu(['复制', '关闭其他'], self.onNotebookTabMenu)
-
     def onOpenDownloadDir(self, evt):
         path = self.ssh_menu.st_path.GetLabel()
         os.startfile(path)
@@ -208,7 +203,42 @@ class ssh_panel(wx.Panel):
             self.desc.tc.Disable()
 
     def onTabButtonAdd(self):
-        self.add_default_page()
+        self.add_default_page(self.nb_console.active_button_tab)
+
+    def add_default_page(self,tabctrl=None):
+        self.nb_console.Freeze()
+        page = DeafaultPage(self.nb_console)
+
+        if tabctrl:
+            from wx.lib.agw.aui import framemanager
+            info = wx.lib.agw.aui.auibook.AuiNotebookPage()
+            info.window = page
+            info.caption = '新标签页'
+            info.active = True
+            info.bitmap = wx.NullBitmap
+            info.disabled_bitmap = wx.NullBitmap
+            info.control = None
+            info.tooltip = ''
+
+            page_idx = self.nb_console.GetPageCount()
+
+            originalPaneMgr = framemanager.GetManager(page)
+            if originalPaneMgr:
+                originalPane = originalPaneMgr.GetPane(page)
+
+                if originalPane:
+                    info.hasCloseButton = originalPane.HasCloseButton()
+            self.nb_console._tabs.InsertPage(page, info, page_idx)
+
+            tabctrl.AddPage(page, info)
+            if self.nb_console._curpage >= page_idx:
+                self.nb_console._curpage+=1
+            self.nb_console.SetSelectionToWindow(page)
+        else:
+            self.nb_console.AddPage(page, '新标签页', True)
+        page.listCtrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_linklist_act)
+        self.nb_console._PageCount += 1
+        self.nb_console.Thaw()
 
     def onTabButtonSSHMenu(self):
         self.ShowSSHMenu()
@@ -294,13 +324,6 @@ class ssh_panel(wx.Panel):
         new_string = f'%s-{unused_number}' % ip
         return new_string
 
-    def add_default_page(self):
-        self.nb_console.Freeze()
-        page = DeafaultPage(self.nb_console)
-        self.nb_console.AddPage(page, '新标签页', True)
-        page.listCtrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_linklist_act)
-        self.nb_console._PageCount += 1
-        self.nb_console.Thaw()
 
     # 连接动画效果
     def connect_ui(self, movetask=True):
