@@ -21,20 +21,10 @@ class sshClient():
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.worker = None
 
-    def connect(self, timeout=5,server=False):
+    def connect(self, timeout=globals.timeout,server=False):
         "server是云桌面服务器"
         print("connect %s: %s %s" % (self.host, self.username, self.password))
-        try:
-            self.ssh.connect(self.host, username=self.username, password=self.password,timeout=timeout)
-        except paramiko.AuthenticationException:
-            logging.error(self.host+': '+"认证失败")
-            raise
-        except paramiko.SSHException as ssh_exception:
-            logging.error(self.host+f"SSH错误: {ssh_exception}")
-            raise
-        except Exception as e:
-            logging.error(self.host+': '+str(e))
-            raise
+        self.ssh.connect(self.host, username=self.username, password=self.password,timeout=timeout)
         if server:
             self.channel = self.ssh.invoke_shell()
         else:
@@ -44,7 +34,7 @@ class sshClient():
     def server_connect(self):
         self.username = globals.vdi_user
         self.password = globals.vdi_user_pwd
-        self.connect(timeout=int(globals.timeout),server=True)
+        self.connect(timeout=int(globals.timeout), server=True)
         try:
             self.channel.send('su\n')
             buff = ""
@@ -59,6 +49,7 @@ class sshClient():
         except Exception as e:
             mMessageBox(str(e))
             raise
+
 
     def show_process(self, curent, total):
         p = 100 * curent / total
@@ -89,14 +80,6 @@ class sshClient():
     def send(self, command):
         self.channel.send(command + '\n')
 
-    def send_for_resp(self, cmd):
-        buff = ""
-
-        self.send(cmd)
-        while not buff.endswith('# '):
-            resp = self.channel.recv(9999)
-            buff += resp.decode('utf8')
-        return buff
 
     def send_withlog(self, command):
         logging.info('%s: %s' % (self.host, command))

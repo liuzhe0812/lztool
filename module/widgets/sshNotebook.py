@@ -5314,8 +5314,8 @@ class PageContainer(wx.Panel):
 
             self.PopupTabsMenu()
 
-        elif where == FNB_OPEN_BUTTON:
-            self.Parent.Parent.open_connect()
+        # elif where == FNB_OPEN_BUTTON:
+        #     self.Parent.Parent.open_connect()
 
         elif where == FNB_MENU_BUTTON:
             self.Parent.Parent.ShowSSHMenu()

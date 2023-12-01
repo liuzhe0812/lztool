@@ -383,8 +383,8 @@ class MyMainPnl(wx.Panel):
         #主面板
         self.panel_ssh = ssh_panel.ssh_panel(self)
         self.panel_ssh.SetBackgroundColour(globals.bgcolor)
-        self.panel_ssh.panel11.Show()
-        self.panel_ssh.panel12.Hide()
+        # self.panel_ssh.panel_multi_ssh.Show()
+        self.panel_ssh.splitter_left.Hide()
 
         self.panel_tools = panels.tool_panel(self)
         self.panel_tools.SetBackgroundColour(globals.bgcolor)
@@ -493,25 +493,6 @@ class Myframe(wx.Frame):
         self.Bind(wx.EVT_MOTION, self.OnMouseMove)
         self.Bind(wx.EVT_CLOSE, self.OnCloseWindow)
 
-    def AlphaCycle(self, *args):
-        """
-        关闭窗口淡出效果
-        """
-
-        self.opacity_out += self.deltaN
-        if self.opacity_out >= 255:
-            self.deltaN = -self.deltaN
-            self.opacity_out = 255
-
-        if self.opacity_out <= 0:
-            self.deltaN = -self.deltaN
-            self.opacity_out = 0
-
-            self.timer_out.Stop()
-            wx.CallAfter(self.Destroy)
-            wx.Exit()
-
-        self.SetTransparent(self.opacity_out)
 
     def CreateCtrls(self):
         self.titleBarPnl = MyTitleBarPnl(self)
@@ -532,7 +513,7 @@ class Myframe(wx.Frame):
         self.SetSizer(mainSizer)
         self.Layout()
 
-    def Message(self, msg, tyep=0):
+    def Message(self, msg):
         flags = [wx.ICON_NONE, wx.ICON_WARNING, wx.ICON_ERROR]
         self.info.ShowMessage(msg, flags[0])
 
@@ -561,9 +542,7 @@ class Myframe(wx.Frame):
         if event.Dragging() and event.LeftIsDown():
             x, y = self.ClientToScreen(event.GetPosition())
             fp = (x - self.delta[0], y - self.delta[1])
-            # self.Freeze()
             self.Move(fp)
-            # self.Thaw()
 
     def OnCloseWindow(self, event):
         pos = self.GetPosition()
@@ -581,7 +560,6 @@ class Myframe(wx.Frame):
         self.Iconize()
 
     def OnShowLog(self,evt):
-        # os.startfile('error.log')
         logframe = LogFrame()
         logframe.Show()
 
@@ -605,6 +583,10 @@ class Myframe(wx.Frame):
             self.config.write(open('config.ini', "w"))
         dlg.Destroy()
 
+    def OnClose(self, event):
+        self._mgr.UnInit()
+        del self._mgr
+        event.Skip()
 
 class LogFrame(LOGEDIT):
     def __init__(self):

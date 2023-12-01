@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-import logging, shutil
-import threadpool, wx.grid, wx.aui, pyperclip, base64, stat, configparser, os, re
+import logging, shutil, threadpool, wx.grid, wx.aui, pyperclip, base64, stat, configparser, os, re
+from time import sleep
 from _thread import start_new_thread
 from .myui import *
 from functools import reduce
@@ -11,6 +11,7 @@ from module.methods import getLabelFromEVT, bytes2human
 import wx.lib.agw.flatnotebook as FNB
 from module.widgets import auiNotebook as ANB
 import module.widgets.aui as aui
+import wx.lib.agw.pycollapsiblepane as PCP
 
 backends = [wx.html2.WebViewBackendEdge, wx.html2.WebViewBackendIE]
 BACKEND = None
@@ -25,6 +26,7 @@ for id in backends:
 AUI_BUTTON_ADD = 201
 AUI_BUTTON_FILETRANSFER = 202
 
+
 class ssh_panel(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
@@ -32,7 +34,6 @@ class ssh_panel(wx.Panel):
         self.link_ok = 0  # 连接成功数
         self._IsMulti = True
         self.sftp_status = False
-        self.is_conecting = False  # 用来处理default page
         globals.multi_ssh_conn = {}  # host : {'conn','gauge'}
         self.treeNode_dict = {}  # host : child_id
         self.shellpage_dic = {}  # host : shell_panel
@@ -40,34 +41,37 @@ class ssh_panel(wx.Panel):
         self.__evt_bind()
 
     def __init__ui(self):
-        bSizerAll = wx.BoxSizer(wx.VERTICAL)
-        bSizer0 = wx.BoxSizer(wx.HORIZONTAL)
-        bSizer1 = wx.BoxSizer(wx.VERTICAL)  # 会话树
-        bSizer2 = wx.BoxSizer(wx.VERTICAL)  # SHELL界面
+        self.splitter_all = wx.SplitterWindow(self)
+        self.ssh_right_panel = wx.Panel(self.splitter_all)
+        self.ssh_left_panel = wx.Panel(self.splitter_all)
 
-        bSizer11 = wx.BoxSizer(wx.VERTICAL)
-        bSizer12 = wx.BoxSizer(wx.VERTICAL)
+        self.splitter_all.SplitVertically(self.ssh_left_panel,self.ssh_right_panel,231)
+        self.panel_multi_ssh = wx.Panel(self.ssh_left_panel, size=(231, -1))  # 批量连接设置
+        self.splitter_left = wx.SplitterWindow(self.ssh_left_panel)
 
-        self.panel11 = wx.Panel(self, size=(231, -1))  # 批量连接设置
-        self.panel12 = wx.Panel(self, size=(231, -1))  # 连接列表
+        self.panel_session_tree = wx.Panel(self.splitter_left, size=(231, -1))  # 连接列表
+        self.panel_scp = scp_panel(self.splitter_left, None)  # 文件传输panel
+        self.splitter_left.SplitHorizontally(self.panel_scp,self.panel_session_tree)
+        self.splitter_left.SetSashGravity(0.5)
 
+        # panel_multi_ssh
         bSizerInfo = wx.BoxSizer(wx.VERTICAL)
-        self.panel11.SetSizer(bSizerInfo)
-        info_label = wx.StaticText(self.panel11, label='批量连接', size=(-1, 25), style=wx.ALIGN_CENTER)
+        self.panel_multi_ssh.SetSizer(bSizerInfo)
+        info_label = wx.StaticText(self.panel_multi_ssh, label='批量连接', size=(-1, 25), style=wx.ALIGN_CENTER)
         info_label.SetFont(wx.Font(12, 70, 90, 92, False, "微软雅黑"))
         info_label.SetBackgroundColour('#95a5a6')
         info_label.SetForegroundColour('#ffffff')
-        self.num = mInput(self.panel11, st_label='数量', tc_label='2', st_size=(60, 25), font_size=12)
-        self.host = mInput(self.panel11, st_label='起始IP', tc_label='172.31.13.240', st_size=(60, 25), font_size=12)
-        self.port = mInput(self.panel11, st_label='端口', tc_label='22', st_size=(60, 25), font_size=12)
-        self.username = mInput(self.panel11, st_label='用户名', tc_label='root', st_size=(60, 25), font_size=12)
-        self.password = mInput(self.panel11, st_label='密码', tc_label='oseasy@123', st_size=(60, 25), font_size=12,
+        self.num = mInput(self.panel_multi_ssh, st_label='数量', tc_label='2', st_size=(60, 25), font_size=12)
+        self.host = mInput(self.panel_multi_ssh, st_label='起始IP', tc_label='172.31.13.240', st_size=(60, 25), font_size=12)
+        self.port = mInput(self.panel_multi_ssh, st_label='端口', tc_label='22', st_size=(60, 25), font_size=12)
+        self.username = mInput(self.panel_multi_ssh, st_label='用户名', tc_label='root', st_size=(60, 25), font_size=12)
+        self.password = mInput(self.panel_multi_ssh, st_label='密码', tc_label='oseasy@123', st_size=(60, 25), font_size=12,
                                password=True)
-        self.name = mInput(self.panel11, st_label='名称', tc_label='', st_size=(60, 25), font_size=12)
-        self.desc = mInput(self.panel11, st_label='描述', tc_label='', st_size=(60, 25), font_size=12)
-        self.bt_connect = mButton(self.panel11, label='连接', color='deepgreen', size=(-1, 25))
+        self.name = mInput(self.panel_multi_ssh, st_label='名称', tc_label='', st_size=(60, 25), font_size=12)
+        self.desc = mInput(self.panel_multi_ssh, st_label='描述', tc_label='', st_size=(60, 25), font_size=12)
+        self.bt_connect = mButton(self.panel_multi_ssh, label='连接', color='deepgreen', size=(-1, 25))
         self.bt_connect.SetFont(wx.Font(12, 70, 90, 92, False, "微软雅黑"))
-        self.CB_save = wx.CheckBox(self.panel11, wx.ID_ANY, "保存登录信息", wx.DefaultPosition, wx.DefaultSize, 0)
+        self.CB_save = wx.CheckBox(self.panel_multi_ssh, wx.ID_ANY, "保存登录信息", wx.DefaultPosition, wx.DefaultSize, 0)
         self.CB_save.Bind(wx.EVT_CHECKBOX, self.on_cb_save)
 
         sshconfig = configparser.ConfigParser()
@@ -87,14 +91,13 @@ class ssh_panel(wx.Panel):
         bSizerInfo.Add(self.name, 0, wx.EXPAND | wx.TOP, 1)
         bSizerInfo.Add(self.desc, 0, wx.EXPAND | wx.TOP, 1)
         bSizerInfo.Add(self.bt_connect, 0, wx.EXPAND | wx.TOP, 1)
-
         self.name.tc.Disable()
         self.desc.tc.Disable()
 
-        self.panel11.SetSizer(bSizerInfo)
-        bSizer11.Add(self.panel11, 1, wx.EXPAND | wx.TOP, 5)
+        self.panel_multi_ssh.SetSizer(bSizerInfo)
 
-        self.tree_session = mHyperTreeList(self.panel12, cols=['主机', '任务'])
+        # panel_session_tree布局
+        self.tree_session = mHyperTreeList(self.panel_session_tree, cols=['主机', '任务'])
         self.tree_session.SetWindowStyle(wx.NO_BORDER)
         self.tree_session.SetAGWWindowStyleFlag(wx.TR_HIDE_ROOT)
         self.tree_session.SetBackgroundColour('white')
@@ -106,50 +109,54 @@ class ssh_panel(wx.Panel):
         self.tree_session.AssignImageList(il)
 
         bSizerBT = wx.BoxSizer(wx.HORIZONTAL)
-        txt1 = wx.StaticText(self.panel12, label='在线数：')
+        txt1 = wx.StaticText(self.panel_session_tree, label='在线数：')
         txt1.SetFont(wx.Font(11, 70, 90, 90, False, "微软雅黑"))
-        self.st_session_count = wx.StaticText(self.panel12, label='0')
+        self.st_session_count = wx.StaticText(self.panel_session_tree, label='0')
         self.st_session_count.SetFont(wx.Font(11, 70, 90, 90, False, "微软雅黑"))
-        # vdi_config = mBitmapButton(self.panel12, "bitmaps/terminalconfig.png", 'VDI终端设置')
-        # vdi_config.Bind(wx.EVT_BUTTON, self.on_vdi_config)
-        bt_refresh = mBitmapButton(self.panel12, 'bitmaps/ssh_refresh.png', '刷新')
+        bt_refresh = mBitmapButton(self.panel_session_tree, 'bitmaps/ssh_refresh.png', '刷新')
         bt_refresh.Bind(wx.EVT_BUTTON, self.RefreshSSHList)
-        bt_disconnect = mBitmapButton(self.panel12, 'bitmaps/disconnect.png', '全部断开')
+        bt_disconnect = mBitmapButton(self.panel_session_tree, 'bitmaps/disconnect.png', '全部断开')
         bt_disconnect.Bind(wx.EVT_BUTTON, self.close_all_ssh)
 
         bSizerBT.Add(txt1, 0, wx.LEFT | wx.ALIGN_CENTER, 5)
         bSizerBT.Add(self.st_session_count, 1, wx.ALIGN_CENTER)
-        # bSizerBT.Add(vdi_config, 0, wx.ALIGN_CENTER)
         bSizerBT.Add(bt_refresh, 0, wx.ALIGN_CENTER | wx.LEFT, 5)
         bSizerBT.Add(bt_disconnect, 0, wx.ALIGN_CENTER | wx.LEFT, 5)
-
         bSizerTree = wx.BoxSizer(wx.VERTICAL)
         bSizerTree.Add(self.tree_session, 1, wx.EXPAND)
         bSizerTree.Add(bSizerBT, 0, wx.EXPAND)
 
-        self.panel12.SetSizer(bSizerTree)
-        bSizer12.Add(self.panel12, 1, wx.EXPAND | wx.TOP, 5)
+        self.panel_session_tree.SetSizer(bSizerTree)
 
-        bSizer1.Add(bSizer11, 0, wx.EXPAND)
-        bSizer1.Add(bSizer12, 1, wx.EXPAND)
-
-
-        self.nb_console = ANB.auiNotebook(parent=self)
+        # ssh_right_panel布局
+        self.nb_console = ANB.auiNotebook(parent=self.ssh_right_panel)
         self.nb_console.tab_context_menu = {'txt': ['复制', '关闭其他'], 'method': self.onNotebookTabMenu}
-        self.nb_console.addTabButtons(AUI_BUTTON_ADD, wx.LEFT,wx.Bitmap('bitmaps/add_console.png', wx.BITMAP_TYPE_PNG),self.onTabButtonAdd)
-        self.nb_console.addTabButtons(AUI_BUTTON_FILETRANSFER, wx.RIGHT, wx.Bitmap('bitmaps/ssh_menu.png', wx.BITMAP_TYPE_PNG),self.onTabButtonSSHMenu)
+        self.nb_console.addTabButtons(AUI_BUTTON_ADD, wx.LEFT, wx.Bitmap('bitmaps/add_console.png', wx.BITMAP_TYPE_PNG),
+                                      self.onTabButtonAdd)
+        self.nb_console.addTabButtons(AUI_BUTTON_FILETRANSFER, wx.RIGHT,
+                                      wx.Bitmap('bitmaps/ssh_menu.png', wx.BITMAP_TYPE_PNG), self.onTabButtonSSHMenu)
 
         self.ssh_menu = SSHPopupWindow(self, wx.SIMPLE_BORDER)
         self.ssh_menu.st_path.SetLabel(methods.get_config('ssh', 'download_path'))
 
+        self.cmd_panel = command_panel(self.ssh_right_panel)
+
         self.add_default_page()
 
+        # 整体布局
+
+        bSizer1 = wx.BoxSizer(wx.VERTICAL)  # 批量连接panel+spliter
+        bSizer1.Add(self.panel_multi_ssh, 1, wx.EXPAND|wx.LEFT,3)
+        bSizer1.Add(self.splitter_left, 1, wx.EXPAND|wx.LEFT,3)
+        self.ssh_left_panel.SetSizer(bSizer1)
+
+        bSizer2 = wx.BoxSizer(wx.VERTICAL)  # SHELL界面
         bSizer2.Add(self.nb_console, 1, wx.EXPAND | wx.RIGHT | wx.LEFT, 5)
+        bSizer2.Add(self.cmd_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        self.ssh_right_panel.SetSizer(bSizer2)
 
-        bSizer0.Add(bSizer1, 0, wx.EXPAND, 0)
-        bSizer0.Add(bSizer2, 1, wx.EXPAND, 0)
-
-        bSizerAll.Add(bSizer0, 1, wx.EXPAND | wx.LEFT, 5)
+        bSizerAll = wx.BoxSizer(wx.VERTICAL)
+        bSizerAll.Add(self.splitter_all, 1, wx.EXPAND)
         self.SetSizer(bSizerAll)
         self.Layout()
 
@@ -162,7 +169,6 @@ class ssh_panel(wx.Panel):
         self.Bind(aui.EVT_AUINOTEBOOK_PAGE_CLOSED, self.onNotebookPageClose, self.nb_console)
         self.ssh_menu.bt_open.Bind(wx.EVT_BUTTON, self.onOpenDownloadDir)
         self.ssh_menu.bt_cancel.Bind(wx.EVT_BUTTON, self.onSFTPCancel)
-
 
     def RefreshSSHList(self, evt):
         i = 0
@@ -205,7 +211,7 @@ class ssh_panel(wx.Panel):
     def onTabButtonAdd(self):
         self.add_default_page(self.nb_console.active_button_tab)
 
-    def add_default_page(self,tabctrl=None):
+    def add_default_page(self, tabctrl=None):
         self.nb_console.Freeze()
         page = DeafaultPage(self.nb_console)
 
@@ -232,7 +238,7 @@ class ssh_panel(wx.Panel):
 
             tabctrl.AddPage(page, info)
             if self.nb_console._curpage >= page_idx:
-                self.nb_console._curpage+=1
+                self.nb_console._curpage += 1
             self.nb_console.SetSelectionToWindow(page)
         else:
             self.nb_console.AddPage(page, '新标签页', True)
@@ -254,7 +260,7 @@ class ssh_panel(wx.Panel):
         if self.nb_console._PageCount == 1:
             self.add_default_page()
 
-    def DeleteAllPages(self,default_page=True):
+    def DeleteAllPages(self, default_page=True):
         self.nb_console.Freeze()
         while self.nb_console._PageCount:
             self.nb_console.DeletePage(0)
@@ -264,12 +270,12 @@ class ssh_panel(wx.Panel):
 
         self.nb_console.Thaw()
 
-    def deletePageData(self,page_label):
-        '处理page相关线程和dict'
+    def deletePageData(self, page_label):
+        '处理page相关线程和dict,只对dict内conn'
         if page_label in globals.multi_ssh_conn.keys():  # 不是复制的页面
             globals.multi_ssh_conn[page_label].console = False
-            self.shellpage_dic[page_label].nb_console_operate.MONITER_STAT = False  # 停止监控线程
             self.shellpage_dic.pop(page_label)
+            # self.shellpage_dic[page_label].nb_console_operate.MONITER_STAT = False  # 停止监控线程
 
     def close_all_ssh(self, evt):
         self.DeleteAllPages(True)
@@ -279,8 +285,8 @@ class ssh_panel(wx.Panel):
         self.tree_session.root = None
         self.tree_session.DeleteAllItems()
         self.change_online_count(None)
-        self.panel11.Show()
-        self.panel12.Hide()
+        self.panel_multi_ssh.Show()
+        self.splitter_left.Hide()
         self.Layout()
 
     def onNotebookTabMenu(self, evt):
@@ -324,15 +330,14 @@ class ssh_panel(wx.Panel):
         new_string = f'%s-{unused_number}' % ip
         return new_string
 
-
     # 连接动画效果
     def connect_ui(self, movetask=True):
-        self.panel11.Hide()
-        self.panel12.Show()
-        self.Layout()
+        self.panel_multi_ssh.Hide()
+        self.splitter_left.Show()
+        self.ssh_left_panel.Layout()
         # if movetask:
-        #     moveTask(self.panel12, 500, 0, False, layout=self)
-        #     moveTask(self.panel12, 500, 20, False, True, layout=self)
+        #     moveTask(self.panel_session_tree, 500, 0, False, layout=self)
+        #     moveTask(self.panel_session_tree, 500, 20, False, True, layout=self)
 
     def get_ssh_info(self):
         return self.num.GetValue(), self.host.GetValue(), self.port.GetValue(), self.username.GetValue(), self.password.GetValue(), self.name.GetValue(), self.desc.GetValue()
@@ -357,18 +362,69 @@ class ssh_panel(wx.Panel):
 
     #  SSH连接
 
+    def save_config_file(self,info):
+        num, host, port, user, password, name, desc = info
+        sshconfig = configparser.ConfigParser()
+        shutil.copyfile('template.ini', 'data/sshclient/%s' % name)
+        sshconfig.read('data/sshclient/%s' % name)
+        sshconfig.set('default', 'host', host)
+        sshconfig.set('default', 'port', port)
+        sshconfig.set('default', 'user', user)
+        sshconfig.set('default', 'password', password)
+        sshconfig.set('default', 'desc', desc)
+        sshconfig.set('default', 'num', num)
+        sshconfig.write(open('data/sshclient/%s' % name, "w"))
+        self.CB_save.SetValue(False)
+
+    def init_session_tree(self,ip_list):
+        if not self.tree_session.root:
+            self.tree_session.root = self.tree_session.AddRoot('连接列表', ct_type=1)
+
+        # 通过link_list初始化连接列表
+        num2ip = lambda x: '.'.join([str(x // (256 ** i) % 256) for i in range(3, -1, -1)])
+
+        # ip to num做排序
+        num_list = []
+        for ip in ip_list:
+            num = reduce(lambda x, y: (x << 8) + y, list(map(int, ip.split('.'))))
+            num_list.append(num)
+        num_list.sort()
+
+        # num to ip，初始化Tree
+        for num in num_list:
+            ip = num2ip(num)
+            child = self.tree_session.AppendItem(self.tree_session.root, ip, ct_type=0)
+            self.tree_session.SetItemWindow(child, globals.multi_ssh_conn[ip].gauge, 1)
+            self.treeNode_dict[ip] = child
+
     def create_connect(self, evt):
+        '批量连接'
         info = self.get_ssh_info()
-        self.start_connect(info)
         self.DeleteAllPages(False)
+        self.start_connect(info)
+        if self.CB_save.GetValue():
+            self.save_config_file(info)
 
     def start_connect(self, info):
+        "1、批量连接  2、session list dclick"
         num, host, port, user, password, name, desc = info
+
         self.total = int(num)
         self.done = 0
 
-        # 创建本次连接字典link_list  ip:conn
-        link_list = []
+        sshconfig = configparser.ConfigParser()
+        sshconfig.read('template.ini')
+        sshconfig.set('default', 'host', host)
+        sshconfig.set('default', 'port', port)
+        sshconfig.set('default', 'user', user)
+        sshconfig.set('default', 'password', password)
+        sshconfig.set('default', 'desc', desc)
+        sshconfig.set('default', 'num', num)
+        sshconfig.write(open('template.ini', "w"))
+
+        # 初始化session tree
+        conn_list = []
+        ip_list = []
         for i in range(int(num)):
             IPAddr = methods.ipIncrease(host, i)
             if IPAddr in globals.multi_ssh_conn.keys():
@@ -379,60 +435,15 @@ class ssh_panel(wx.Panel):
             conn.port = int(port)
             conn.username = user
             conn.password = password
-            conn.gauge = mGauge(self.panel12, (80, 18), 100, 'white', wx.Colour(230, 230, 230), border_colour='white')
-            link_list.append(conn)
+            conn.gauge = mGauge(self.panel_session_tree, (80, 18), 100, 'white', wx.Colour(230, 230, 230), border_colour='white')
+            conn_list.append(conn)
+            ip_list.append(IPAddr)
             globals.multi_ssh_conn[IPAddr] = conn
-        if not link_list:
-            self.is_conecting = False
-
-        num, host, port, user, password, name, desc = info
-        sshconfig = configparser.ConfigParser()
-        if self.CB_save.GetValue():
-            # 保存配置文件
-            shutil.copyfile('template.ini', 'data/sshclient/%s' % name)
-            sshconfig.read('data/sshclient/%s' % name)
-            sshconfig.set('default', 'host', host)
-            sshconfig.set('default', 'port', port)
-            sshconfig.set('default', 'user', user)
-            sshconfig.set('default', 'password', password)
-            sshconfig.set('default', 'desc', desc)
-            sshconfig.set('default', 'num', num)
-            sshconfig.write(open('data/sshclient/%s' % name, "w"))
-        else:
-            sshconfig.read('template.ini')
-            sshconfig.set('default', 'host', host)
-            sshconfig.set('default', 'port', port)
-            sshconfig.set('default', 'user', user)
-            sshconfig.set('default', 'password', password)
-            sshconfig.set('default', 'desc', desc)
-            sshconfig.set('default', 'num', num)
-            sshconfig.write(open('template.ini', "w"))
-        self.CB_save.SetValue(False)
-
-        if not self.tree_session.root:
-            self.tree_session.root = self.tree_session.AddRoot('连接列表', ct_type=1)
-
-        # 通过link_list初始化连接列表
-        num2ip = lambda x: '.'.join([str(x // (256 ** i) % 256) for i in range(3, -1, -1)])
-
-        # ip to num做排序
-        tmp_list = [obj.host for obj in link_list]
-        ip_list = []
-        for ip in tmp_list:
-            num = reduce(lambda x, y: (x << 8) + y, list(map(int, ip.split('.'))))
-            ip_list.append(num)
-        ip_list.sort()
-
-        # num to ip，初始化Tree
-        for num in ip_list:
-            ip = num2ip(num)
-            child = self.tree_session.AppendItem(self.tree_session.root, ip, ct_type=0)
-            self.tree_session.SetItemWindow(child, globals.multi_ssh_conn[ip].gauge, 1)
-            self.treeNode_dict[ip] = child
+        self.init_session_tree(ip_list)
 
         # 线程池执行connect_tread
         pool = threadpool.ThreadPool(globals.max_thread)
-        requests = threadpool.makeRequests(self.connect_thread, link_list)
+        requests = threadpool.makeRequests(self.connect_thread, conn_list)
         [pool.putRequest(req) for req in requests]
         self.st_session_count.SetLabel('%s' % self.link_ok)
         self.connect_ui()
@@ -456,26 +467,35 @@ class ssh_panel(wx.Panel):
             self.total = 0
             if self.link_ok > 0:
                 wx.CallAfter(self.add_shell_page, (globals.cur_conn))
-                self.is_conecting = False
                 self.Layout()
             else:
                 self.close_all_ssh(None)
 
-    def open_connect(self):
-        dlg = dialogs.open_connect()
-        dlg.listCtrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_linklist_act)
-        dlg.ShowModal()
-        dlg.Destroy()
+    def create_session(self, conn):
+        try:
+            conn.connect()
+        except:
+            raise
+        if not self.tree_session.root:
+            self.connect_ui()
+            self.tree_session.root = self.tree_session.AddRoot('连接列表', ct_type=1)
+        globals.multi_ssh_conn[conn.host] = conn
+        child = self.tree_session.AppendItem(self.tree_session.root, conn.host, ct_type=0)
+        wx.CallAfter(self.tree_session.SetItemWindow, child, globals.multi_ssh_conn[conn.host].gauge, 1)
+        self.tree_session.SetItemImage(child, self.greenball)
+        conn.gauge.SetValue(100, '无')
+        self.treeNode_dict[conn.host] = child
+        self.change_online_count(1)
+        globals.cur_conn = conn
+        wx.CallAfter(self.add_shell_page, conn)
+        return conn
 
     def on_linklist_act(self, evt):
-        parent = evt.GetEventObject().Parent  # panel or dialog
+        parent = evt.GetEventObject().Parent
         sshclient = evt.GetText()
         info = self.read_ssh_config(sshclient)
-        self.is_conecting = True
         self.start_connect(info)
         self.nb_console.DeletePage(self.nb_console.GetPageIndex(parent))
-        if isinstance(parent, wx.Dialog):
-            parent.Destroy()
 
     def change_online_count(self, n):
         if n == None:
@@ -529,6 +549,7 @@ class ssh_panel(wx.Panel):
                 self.tree_session.SetItemImage(self.treeNode_dict[self.link_selected], self.redball)
                 if ip in list(self.shellpage_dic.keys()):
                     self.nb_console.DeletePage(self.nb_console.GetPageIndex(self.shellpage_dic[ip]))
+                    self.shellpage_dic.pop(ip)
         elif item.GetItemLabel() == '控制台':
             conn = globals.multi_ssh_conn[self.link_selected]
             if conn.linkok():
@@ -546,7 +567,8 @@ class ssh_panel(wx.Panel):
                 self.tree_session.Delete(self.treeNode_dict[ip])
                 globals.multi_ssh_conn.pop(ip)
                 if ip in list(self.shellpage_dic.keys()):
-                    self.nb_console.DeletePage(self.nb_console.GetPageIndex(self.shellpage_dic[ip]))
+                    page_idx = self.nb_console.GetPageIndex(self.shellpage_dic[ip])
+                    self.nb_console.DeletePage(page_idx)
                     self.shellpage_dic.pop(ip)
 
     def reconnect(self, conn):
@@ -591,20 +613,15 @@ class ssh_panel(wx.Panel):
 
 
 # shell界面分割窗
-class shell_panel(wx.SplitterWindow):
+class shell_panel(wx.Panel):
     def __init__(self, parent, conn):
-        wx.SplitterWindow.__init__(self, parent=parent, size=(256, -1), style=wx.SP_NOBORDER | wx.TAB_TRAVERSAL)
+        wx.Panel.__init__(self, parent=parent)
         self.conn = conn
         self.SetBackgroundColour(globals.bgcolor)
-
+        s0 = wx.BoxSizer()
+        self.SetSizer(s0)
         self.browser = WebView.New(self, backend=BACKEND)
-
-        self.nb_console_operate = shell_notebook(self, self.conn)
-        self.nb_console_operate.SetTabAreaColour(globals.panel_bgcolor)
-
-        self.SetMinimumPaneSize(200)
-        self.SplitHorizontally(self.browser, self.nb_console_operate, -200)
-        self.SetSashGravity(1)
+        s0.Add(self.browser, 1, wx.EXPAND)
 
         self.refresh()
 
@@ -624,18 +641,43 @@ class DeafaultPage(wx.Panel):
     def __init__(self, parent):
         wx.Panel.__init__(self, parent, style=wx.TAB_TRAVERSAL)
 
+        self.ssh_panel = parent.Parent.Parent.Parent
         self.conn = None
         self.SetBackgroundColour('white')
 
-        self.bSizer1 = wx.BoxSizer(wx.VERTICAL)
+        bSizer0 = wx.BoxSizer(wx.HORIZONTAL)
+        bSizer1 = wx.BoxSizer(wx.VERTICAL)
+        bSizer2 = wx.BoxSizer(wx.HORIZONTAL)
+
+        self.ch_hostType = wx.Choice(self, choices=['oe server', 'oe 3v client'], style=wx.BORDER_SIMPLE)
+        self.ch_hostType.SetSelection(0)
+        self.tc_host = wx.TextCtrl(self, size=(150, -1), style=wx.TE_PROCESS_ENTER | wx.BORDER_SIMPLE)
+        self.tc_host.SetHint('快速连接')
+        self.tc_host.SetFocus()
+        self.ai = wx.ActivityIndicator(self)
+        self.ai.Hide()
+        self.Bind(wx.EVT_TEXT_ENTER, self.on_enter, self.tc_host)
+
+        bSizer2.Add(self.tc_host, 0, wx.EXPAND)
+        bSizer2.Add(self.ch_hostType, 0, wx.EXPAND)
+        bSizer1.Add(bSizer2, 0, wx.ALIGN_CENTER)
+
+        list_title = wx.StaticText(self, label='用户会话')
+        list_title.SetFont(wx.Font(10, 70, 90, 92, False, "微软雅黑"))
+        bSizer1.Add(list_title, 0, wx.ALIGN_CENTER | wx.TOP, 20)
+
         cols = ['名称', '起始IP', '端口', '数量', '用户名', '描述']
         self.listCtrl = sshclient_list(self, cols)
-        self.listCtrl.SetColumnWidth(0, 150)
+        self.listCtrl.SetColumnWidth(0, 100)
         self.listCtrl.SetColumnWidth(1, 120)
-        self.listCtrl.SetColumnWidth(2, 60)
-        self.listCtrl.SetColumnWidth(3, 60)
-        self.bSizer1.Add(self.listCtrl, 1, wx.TOP | wx.BOTTOM | wx.LEFT, 20, 1)
-        self.SetSizer(self.bSizer1)
+        self.listCtrl.SetColumnWidth(2, 50)
+        self.listCtrl.SetColumnWidth(3, 50)
+        self.listCtrl.SetSize(self.listCtrl.GetBestSize())
+
+        bSizer1.Add(self.listCtrl, 0, wx.ALIGN_CENTER)
+
+        bSizer0.Add(bSizer1, 1, wx.ALIGN_CENTER)
+        self.SetSizer(bSizer0)
 
         for parent, dirnames, filenames in os.walk('data/sshclient'):
             n = 0
@@ -653,6 +695,44 @@ class DeafaultPage(wx.Panel):
                 row = self.listCtrl.InsertItem(n, filename)
                 for col in range(len(info)):
                     self.listCtrl.SetItem(row, col, info[col])
+
+    def on_enter(self, evt):
+        host = self.tc_host.GetValue()
+        if host in globals.multi_ssh_conn.keys():
+            return
+        self.tc_host.Disable()
+        self.ai.Start()
+        self.ai.SetPosition(self.tc_host.GetPosition() - (30, 0))
+        self.ai.Show()
+
+        self.conn = ssh.sshClient()
+        self.conn.host = host
+        if self.ch_hostType.GetSelection() == 0:
+            self.conn.username = globals.vdi_user
+            self.conn.password = globals.vdi_user_pwd
+        else:
+            self.conn.username = 'root'
+            self.conn.password = '3vclientroot'
+        self.conn.gauge = mGauge(self.ssh_panel.panel_session_tree, (80, 18), 100, 'white', wx.Colour(230, 230, 230),
+                                 border_colour='white')
+
+        start_new_thread(self.create_session, ())
+
+    def create_session(self):
+        try:
+            self.ssh_panel.create_session(self.conn)
+            if self.ch_hostType.GetSelection() == 0:
+                self.conn.send('su')
+                sleep(0.2)
+                self.conn.send(globals.vdi_root_pwd)
+            page_idx = self.Parent.GetPageIndex(self)
+            self.Parent.DeletePage(page_idx)
+        except Exception as e:
+            self.ai.Stop()
+            self.ai.Hide()
+            self.tc_host.Enable()
+            self.Layout()
+            wx.CallAfter(mMessageBox, label=str(e), parent=None)
 
 
 class CopyPage(wx.Panel):
@@ -679,6 +759,7 @@ class CopyPage(wx.Panel):
         self.browser.LoadURL(url)
 
 
+# 拆分成3个panel
 class shell_notebook(FNB.FlatNotebook):
     def __init__(self, parent, conn):
         FNB.FlatNotebook.__init__(self, parent=parent, agwStyle=FNB.FNB_NODRAG | FNB.FNB_FF2
@@ -692,37 +773,142 @@ class shell_notebook(FNB.FlatNotebook):
         self.item_sel = None
         self.MONITER_STAT = True
 
-        self.panel_file = wx.Panel(self)
         self.panel_cmd = wx.Panel(self)
         self.panel_moniter = wx.Panel(self)
         self.panel_moniter.SetBackgroundColour('white')
         self.AddPage(self.panel_cmd, '命令')
-        self.AddPage(self.panel_file, '文件')
+        self.AddPage(self, '文件')
         self.AddPage(self.panel_moniter, '系统信息')
         self.SetFont(wx.Font(10, 70, 90, 92, False, "宋体"))
 
-        self.init_panel_cmd()
-        self.init_panel_file()
         self.init_panel_moniter()
         self.Layout()
 
-    ### 文件窗口
-    def init_panel_file(self):
+    # 监控窗口
+    def init_panel_moniter(self):
+        sizer_main = wx.BoxSizer(wx.HORIZONTAL)
+        self.panel_moniter.SetSizer(sizer_main)
+        sizer1 = wx.BoxSizer(wx.VERTICAL)  # CPU 内存 运行
+        s1l0 = wx.BoxSizer(wx.HORIZONTAL)
+        s1l1 = wx.BoxSizer(wx.HORIZONTAL)
+        s1l2 = wx.BoxSizer(wx.HORIZONTAL)
+        s1l3 = wx.BoxSizer(wx.HORIZONTAL)
+        s1l4 = wx.BoxSizer(wx.HORIZONTAL)
+        sizer1.Add(s1l0, 0, wx.EXPAND)
+        sizer1.Add(s1l1, 0, wx.EXPAND)
+        sizer1.Add(s1l2, 0, wx.EXPAND)
+        sizer1.Add(s1l3, 0, wx.EXPAND)
+        sizer1.Add(s1l4, 0, wx.EXPAND)
+
+        sizer2 = wx.BoxSizer(wx.VERTICAL)
+        sizer3 = wx.BoxSizer(wx.VERTICAL)  #
+        sizer_main.Add(sizer1, 0, wx.EXPAND)
+        sizer_main.Add(sizer2, 0, wx.EXPAND)
+        sizer_main.Add(sizer3, 0, wx.EXPAND)
+
+        self.gauge_cpu = mGauge(self.panel_moniter)
+        self.gauge_mem = mGauge(self.panel_moniter)
+        self.gauge_swap = mGauge(self.panel_moniter)
+        st_cpu = wx.StaticText(self.panel_moniter, label='CPU')
+        st_mem = wx.StaticText(self.panel_moniter, label='内存')
+        st_swap = wx.StaticText(self.panel_moniter, label='交换')
+
+        st_1 = wx.StaticText(self.panel_moniter, label='运行')
+        st_2 = wx.StaticText(self.panel_moniter, label='负载')
+        self.runtime = wx.StaticText(self.panel_moniter, label='')
+        self.load = wx.StaticText(self.panel_moniter, label='')
+
+        s1l0.Add(st_1, 0, wx.TOP | wx.LEFT, 5)
+        s1l0.Add(self.runtime, 1, wx.TOP | wx.LEFT, 5)
+        s1l1.Add(st_2, 0, wx.TOP | wx.LEFT, 5)
+        s1l1.Add(self.load, 1, wx.TOP | wx.LEFT, 5)
+
+        s1l2.Add(st_cpu, 0, wx.TOP | wx.LEFT, 5)
+        s1l2.Add(self.gauge_cpu, 0, wx.TOP | wx.LEFT, 5)
+        s1l3.Add(st_mem, 0, wx.TOP | wx.LEFT, 5)
+        s1l3.Add(self.gauge_mem, 0, wx.TOP | wx.LEFT, 5)
+        s1l4.Add(st_swap, 0, wx.TOP | wx.LEFT, 5)
+        s1l4.Add(self.gauge_swap, 0, wx.TOP | wx.LEFT, 5)
+
+        re = self.conn.recv("cat /proc/stat | head -n 1 | awk '{print $2,$3,$4,$5}'")
+        re = re.strip().split('\n')
+        cpuinfo = re[0].strip().split(' ')
+        self.use_tmp = int(cpuinfo[0]) + int(cpuinfo[1]) + int(cpuinfo[2])
+        self.idle_tmp = int(cpuinfo[3])
+        start_new_thread(self.momniter, ())
+
+    def momniter(self):
+        time.sleep(1)
+        while self.MONITER_STAT:
+            try:
+                use = self.use_tmp
+                idle = self.idle_tmp
+                cmd = "cat /proc/stat | head -n 1 | awk '{print $2,$3,$4,$5}';" \
+                      "free | tail -n +2 | awk '{print $2,$3,$7}';" \
+                      "uptime"
+                re = self.conn.recv(cmd)
+                re = re.strip().split('\n')
+                cpuinfo = re[0].strip().split(' ')
+                self.use_tmp = int(cpuinfo[0]) + int(cpuinfo[1]) + int(cpuinfo[2])
+                self.idle_tmp = int(cpuinfo[3])
+
+                cpu_use = int(100 * (self.use_tmp - use) / (self.use_tmp - use + self.idle_tmp - idle))
+                self.gauge_cpu.SetValue(cpu_use, '%s%%' % cpu_use)
+
+                mem = re[1].split(' ')
+                mem_use = int(mem[0]) - int(mem[2])
+                mem_tot = int(mem[0])
+                mem_use_per = int(100 * mem_use / mem_tot)
+                mem_use_fit = bytes2human(mem_use, start='K')
+                mem_tot_fit = bytes2human(mem_tot, start='K')
+                self.gauge_mem.SetValue(mem_use_per, '%s%%' % mem_use_per, '%s/%s' % (mem_use_fit, mem_tot_fit))
+
+                swap = re[2].split(' ')
+                swap_use = int(swap[1])
+                swap_tot = int(swap[0])
+                if not swap_tot:
+                    self.gauge_swap.SetValue(0, 'no swap', '')
+                else:
+                    swap_use_per = int(100 * swap_use / swap_tot)
+                    swap_use_fit = bytes2human(swap_use, start='K')
+                    swap_tot_fit = bytes2human(swap_tot, start='K')
+                    self.gauge_swap.SetValue(swap_use_per, '%s%%' % swap_use_per,
+                                             '%s/%s' % (swap_use_fit, swap_tot_fit))
+
+                uptime = re[3].split(',')
+                self.runtime.SetLabel(uptime[0].split('up')[1])
+                self.load.SetLabel(uptime[-3].split(':')[1] + uptime[-2] + uptime[-1])
+                time.sleep(2)
+            except Exception as e:
+                logging.error(e)
+
+
+class scp_panel(wx.Panel):
+    def __init__(self, parent, conn):
+        wx.Panel.__init__(self, parent=parent, style=wx.BORDER_THEME)
+        self.SetBackgroundColour(globals.bgcolor)
+        self.ssh_panel = parent
+        self.conn = conn
+        self.item_sel = None
+        self.show_hiden = False
+        self.init_panel()
+
+    def init_panel(self):
         sizer_main = wx.BoxSizer(wx.VERTICAL)
-        self.panel_file.SetSizer(sizer_main)
-        self.panel_file.SetBackgroundColour('white')
+        self.SetSizer(sizer_main)
+        self.SetBackgroundColour('white')
 
         sizer1 = wx.BoxSizer(wx.HORIZONTAL)
-        self.tc_path = wx.TextCtrl(self.panel_file, value='/', size=(300, -1),
+        self.tc_path = wx.TextCtrl(self, value='/', size=(300, -1),
                                    style=wx.NO_BORDER
                                          | wx.TE_PROCESS_ENTER)
         self.Bind(wx.EVT_TEXT_ENTER, self.onPathEnter, self.tc_path)
         self.tc_path.SetForegroundColour(wx.Colour(150, 150, 150))
         self.tc_path.SetFont(wx.Font(wx.Font(11, 70, 90, 90, False, '微软雅黑')))
-        bt_refresh = mBitmapButton(self.panel_file, 'bitmaps/ssh_refresh.png', '刷新')
-        bt_back = mBitmapButton(self.panel_file, 'bitmaps/ssh_back.png', '上级目录')
-        bt_down = mBitmapButton(self.panel_file, 'bitmaps/ssh_down.png', '下载')
-        bt_up = mBitmapButton(self.panel_file, 'bitmaps/ssh_up.png', '上传')
+        bt_refresh = mBitmapButton(self, 'bitmaps/ssh_refresh.png', '刷新')
+        bt_back = mBitmapButton(self, 'bitmaps/ssh_back.png', '上级目录')
+        bt_down = mBitmapButton(self, 'bitmaps/ssh_down.png', '下载')
+        bt_up = mBitmapButton(self, 'bitmaps/ssh_up.png', '上传')
         bt_refresh.Bind(wx.EVT_BUTTON, self.onRefresh)
         bt_back.Bind(wx.EVT_BUTTON, self.onBackDir)
         bt_down.Bind(wx.EVT_BUTTON, self.onDownload)
@@ -735,7 +921,7 @@ class shell_notebook(FNB.FlatNotebook):
         sizer1.Add(bt_up, 0, wx.EXPAND, wx.LEFT, 5)
         sizer_main.Add(sizer1, 0, wx.EXPAND)
 
-        self.file_tree = mHyperTreeList(self.panel_file,
+        self.file_tree = mHyperTreeList(self,
                                         cols=['名称', '大小', '类型', '修改时间', '权限', '用户/用户组'])
         self.file_tree.setColumnWidth([200, 60, 60, 100, 100, 100])
         sizer_main.Add(self.file_tree, 1, wx.EXPAND | wx.TOP | wx.BOTTOM, 3)
@@ -752,10 +938,10 @@ class shell_notebook(FNB.FlatNotebook):
         self.file_tree.GetMainWindow().Bind(wx.EVT_RIGHT_DOWN, self.onRightDown)
         self.file_tree.Bind(wx.EVT_TREE_END_LABEL_EDIT, self.onLabelEdit)
 
+    def init_file_tree(self):
         self.refresh_dir(self.file_tree.root)
         self.file_tree.Expand(self.file_tree.root)
 
-    # 路径输入框回车事件
     def onPathEnter(self, evt):
         path = self.tc_path.GetValue()
         p_list = path.split('/')[1:]
@@ -1006,6 +1192,7 @@ class shell_notebook(FNB.FlatNotebook):
     def refresh_dir(self, father):
         self.file_tree.DeleteChildren(father)
         path = self.getItemPath(father)
+        print(self.show_hiden)
         if self.show_hiden:
             cmd = "ls -AhlL %s" % path
         else:
@@ -1194,12 +1381,36 @@ class shell_notebook(FNB.FlatNotebook):
             frm = file_edit(self, path, self.conn, txt.replace('\r', ''))
             frm.Show()
 
-    ### 命令窗口
-    def init_panel_cmd(self):
-        sizer_main = wx.BoxSizer(wx.VERTICAL)
-        self.panel_cmd.SetSizer(sizer_main)
 
-        splitter = wx.SplitterWindow(self.panel_cmd, style=wx.SP_NOBORDER)
+class command_panel(wx.Panel):
+    def __init__(self, parent):
+        wx.Panel.__init__(self, parent=parent, style=wx.BORDER_THEME)
+        self.ssh_panel = parent
+        self.SetBackgroundColour(globals.bgcolor)
+
+        self.cmd_on_sel = ''
+        self.cmd_bt_dict = {}
+
+        self.cp = PCP.PyCollapsiblePane(self, label='发送命令',
+                                        agwStyle=wx.CP_NO_TLW_RESIZE | wx.CP_GTK_EXPANDER)
+        self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self.OnPaneChanged, self.cp)
+
+        self.MakePaneContent(self.cp.GetPane())
+        self.cp.Expand()
+
+        s0 = wx.BoxSizer()
+        self.SetSizer(s0)
+        s0.Add(self.cp, 1, wx.EXPAND)
+
+    def OnPaneChanged(self, event):
+        self.Layout()
+        self.ssh_panel.Layout()
+
+    def MakePaneContent(self, panel):
+        sizer_main = wx.BoxSizer(wx.VERTICAL)
+        panel.SetSizer(sizer_main)
+
+        splitter = wx.SplitterWindow(panel, style=wx.NO_BORDER)
         splitter.SetSashGravity(1)
         sizer_main.Add(splitter, 1, wx.EXPAND)
 
@@ -1209,7 +1420,7 @@ class shell_notebook(FNB.FlatNotebook):
         self.pnl_r.SetBackgroundColour('white')
 
         splitter.SetMinimumPaneSize(200)
-        splitter.SplitVertically(pnl_l, self.pnl_r, -300)
+        splitter.SplitVertically(pnl_l, self.pnl_r, -200)
 
         sizer_l = wx.BoxSizer(wx.VERTICAL)
         sizer_r = wx.BoxSizer(wx.VERTICAL)
@@ -1265,6 +1476,7 @@ class shell_notebook(FNB.FlatNotebook):
         self.popupmenu_text = ['添加命令']
 
         self.init_cmds()
+        self.Layout()
 
     def on_bt_save(self, evt):
         dlg = add_cmd_dlg()
@@ -1404,101 +1616,3 @@ class shell_notebook(FNB.FlatNotebook):
                 self.cmd_bt_dict[name].Destroy()
                 self.pnl_r.Layout()
             dlg.Destroy()
-
-    # 监控窗口
-    def init_panel_moniter(self):
-        sizer_main = wx.BoxSizer(wx.HORIZONTAL)
-        self.panel_moniter.SetSizer(sizer_main)
-        sizer1 = wx.BoxSizer(wx.VERTICAL)  # CPU 内存 运行
-        s1l0 = wx.BoxSizer(wx.HORIZONTAL)
-        s1l1 = wx.BoxSizer(wx.HORIZONTAL)
-        s1l2 = wx.BoxSizer(wx.HORIZONTAL)
-        s1l3 = wx.BoxSizer(wx.HORIZONTAL)
-        s1l4 = wx.BoxSizer(wx.HORIZONTAL)
-        sizer1.Add(s1l0, 0, wx.EXPAND)
-        sizer1.Add(s1l1, 0, wx.EXPAND)
-        sizer1.Add(s1l2, 0, wx.EXPAND)
-        sizer1.Add(s1l3, 0, wx.EXPAND)
-        sizer1.Add(s1l4, 0, wx.EXPAND)
-
-        sizer2 = wx.BoxSizer(wx.VERTICAL)
-        sizer3 = wx.BoxSizer(wx.VERTICAL)  #
-        sizer_main.Add(sizer1, 0, wx.EXPAND)
-        sizer_main.Add(sizer2, 0, wx.EXPAND)
-        sizer_main.Add(sizer3, 0, wx.EXPAND)
-
-        self.gauge_cpu = mGauge(self.panel_moniter)
-        self.gauge_mem = mGauge(self.panel_moniter)
-        self.gauge_swap = mGauge(self.panel_moniter)
-        st_cpu = wx.StaticText(self.panel_moniter, label='CPU')
-        st_mem = wx.StaticText(self.panel_moniter, label='内存')
-        st_swap = wx.StaticText(self.panel_moniter, label='交换')
-
-        st_1 = wx.StaticText(self.panel_moniter, label='运行')
-        st_2 = wx.StaticText(self.panel_moniter, label='负载')
-        self.runtime = wx.StaticText(self.panel_moniter, label='')
-        self.load = wx.StaticText(self.panel_moniter, label='')
-
-        s1l0.Add(st_1, 0, wx.TOP | wx.LEFT, 5)
-        s1l0.Add(self.runtime, 1, wx.TOP | wx.LEFT, 5)
-        s1l1.Add(st_2, 0, wx.TOP | wx.LEFT, 5)
-        s1l1.Add(self.load, 1, wx.TOP | wx.LEFT, 5)
-
-        s1l2.Add(st_cpu, 0, wx.TOP | wx.LEFT, 5)
-        s1l2.Add(self.gauge_cpu, 0, wx.TOP | wx.LEFT, 5)
-        s1l3.Add(st_mem, 0, wx.TOP | wx.LEFT, 5)
-        s1l3.Add(self.gauge_mem, 0, wx.TOP | wx.LEFT, 5)
-        s1l4.Add(st_swap, 0, wx.TOP | wx.LEFT, 5)
-        s1l4.Add(self.gauge_swap, 0, wx.TOP | wx.LEFT, 5)
-
-        re = self.conn.recv("cat /proc/stat | head -n 1 | awk '{print $2,$3,$4,$5}'")
-        re = re.strip().split('\n')
-        cpuinfo = re[0].strip().split(' ')
-        self.use_tmp = int(cpuinfo[0]) + int(cpuinfo[1]) + int(cpuinfo[2])
-        self.idle_tmp = int(cpuinfo[3])
-        start_new_thread(self.momniter, ())
-
-    def momniter(self):
-        time.sleep(1)
-        while self.MONITER_STAT:
-            try:
-                use = self.use_tmp
-                idle = self.idle_tmp
-                cmd = "cat /proc/stat | head -n 1 | awk '{print $2,$3,$4,$5}';" \
-                      "free | tail -n +2 | awk '{print $2,$3,$7}';" \
-                      "uptime"
-                re = self.conn.recv(cmd)
-                re = re.strip().split('\n')
-                cpuinfo = re[0].strip().split(' ')
-                self.use_tmp = int(cpuinfo[0]) + int(cpuinfo[1]) + int(cpuinfo[2])
-                self.idle_tmp = int(cpuinfo[3])
-
-                cpu_use = int(100 * (self.use_tmp - use) / (self.use_tmp - use + self.idle_tmp - idle))
-                self.gauge_cpu.SetValue(cpu_use, '%s%%' % cpu_use)
-
-                mem = re[1].split(' ')
-                mem_use = int(mem[0]) - int(mem[2])
-                mem_tot = int(mem[0])
-                mem_use_per = int(100 * mem_use / mem_tot)
-                mem_use_fit = bytes2human(mem_use, start='K')
-                mem_tot_fit = bytes2human(mem_tot, start='K')
-                self.gauge_mem.SetValue(mem_use_per, '%s%%' % mem_use_per, '%s/%s' % (mem_use_fit, mem_tot_fit))
-
-                swap = re[2].split(' ')
-                swap_use = int(swap[1])
-                swap_tot = int(swap[0])
-                if not swap_tot:
-                    self.gauge_swap.SetValue(0, 'no swap', '')
-                else:
-                    swap_use_per = int(100 * swap_use / swap_tot)
-                    swap_use_fit = bytes2human(swap_use, start='K')
-                    swap_tot_fit = bytes2human(swap_tot, start='K')
-                    self.gauge_swap.SetValue(swap_use_per, '%s%%' % swap_use_per,
-                                             '%s/%s' % (swap_use_fit, swap_tot_fit))
-
-                uptime = re[3].split(',')
-                self.runtime.SetLabel(uptime[0].split('up')[1])
-                self.load.SetLabel(uptime[-3].split(':')[1] + uptime[-2] + uptime[-1])
-                time.sleep(2)
-            except Exception as e:
-                logging.error(e)

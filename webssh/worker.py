@@ -118,11 +118,6 @@ class Worker(object):
             self.loop.remove_handler(self.fd)
             self.handler.close(reason=reason)
 
-        # dst_addr[0] 为IP
-        # if self.dst_addr[0] in copy_chan and self.chan in copy_chan[self.dst_addr[0]]:
-            # self.chan.close()
-            # self.ssh.close()
-            # copy_chan[self.dst_addr[0]].remove(self.chan)
 
         logging.info('Connection to {}:{} lost'.format(*self.dst_addr))
 

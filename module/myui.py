@@ -122,7 +122,7 @@ class mFocusButton(wx.Button):
         if bitmap:
             bmp = wx.Image(bitmap, wx.BITMAP_TYPE_PNG).ConvertToBitmap()
             self.SetBitmap(bmp, wx.LEFT)
-            self.SetBitmapMargins((2, 2))  # default is 4 but that seems too big to me.
+            self.SetBitmapMargins((2, 2))
 
     def SetPopupMenu(self, menu_txt=[], method=None):
         self.menu_txt = menu_txt
@@ -554,7 +554,7 @@ class mMessageBox(wx.Dialog):
         bSizer9 = wx.BoxSizer(wx.HORIZONTAL)
 
         self.m_staticText2 = wx.StaticText(self, wx.ID_ANY, label, style=wx.NO_BORDER)
-        self.m_staticText2.SetFont(wx.Font(14, 70, 90, 92, False, u"微软雅黑"))
+        # self.m_staticText2.SetFont(wx.Font(14, 70, 90, 92, False, u"微软雅黑"))
 
         bSizer9.Add(self.m_staticText2, 1, wx.ALIGN_CENTER | wx.TOP, 10)
 
