@@ -130,7 +130,7 @@ class mFocusButton(wx.Button):
         self.Bind(wx.EVT_RIGHT_DOWN, self.creaPopupMenu)
 
     def creaPopupMenu(self, evt):
-        self.parent.Parent.Parent.Parent.cmd_on_sel = self.GetLabel()
+        self.parent.Parent.Parent.Parent.Parent.cmd_on_sel = self.GetLabel()
         menu = wx.Menu()
         for text in self.menu_txt:
             item = menu.Append(-1, text)
@@ -306,8 +306,11 @@ class mListCtrl(wx.ListCtrl, listmix.TextEditMixin, listmix.ListCtrlAutoWidthMix
 
 class mHyperTreeList(HTL.HyperTreeList):
     def __init__(self, parent, cols=None,
-                 agwStyle=HTL.TR_AUTO_CHECK_CHILD | HTL.TR_AUTO_CHECK_PARENT | wx.TR_HAS_VARIABLE_ROW_HEIGHT):
-        HTL.HyperTreeList.__init__(self, parent, id=wx.ID_ANY, agwStyle=agwStyle)
+                 agwStyle=None):
+        HTL.HyperTreeList.__init__(self, parent, id=wx.ID_ANY,
+                                   agwStyle=HTL.TR_AUTO_CHECK_CHILD
+                                            | HTL.TR_AUTO_CHECK_PARENT
+                                            | wx.TR_HAS_VARIABLE_ROW_HEIGHT)
 
         self.root = None
         self.EnableSelectionVista(True)
@@ -1905,3 +1908,19 @@ class TabInfo(object):
         """
 
         self._bEnabled = enabled
+
+class mtooltip(wx.Frame):
+    def __init__(self, parent):
+        wx.Frame.__init__(self,parent,style=wx.FRAME_NO_TASKBAR | wx.STAY_ON_TOP | wx.FRAME_SHAPED)
+
+        s0 = wx.BoxSizer()
+        self.SetSizer(s0)
+
+        self.text = wx.StaticText(self)
+        s0.Add(self.text,1,wx.ALIGN_CENTER)
+
+        self.SetBackgroundColour(wx.Colour(255, 255, 225))  # 设置窗口背景颜色
+        self.Hide()
+
+    def SetLabel(self,txt):
+        self.text.SetLabel(txt)

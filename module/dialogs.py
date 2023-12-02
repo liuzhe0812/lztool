@@ -647,8 +647,9 @@ class file_chmod(wx.Dialog):
 
 
 class file_edit(wx.Frame):
-    def __init__(self, parent=None, path=None, conn=None, txt=None, local_file=None,title=None):
+    def __init__(self, parent=None, path=None, conn=None, txt=None, local_file=None,title=''):
         wx.Frame.__init__(self, parent=parent, size=(800, 600),title=title)
+        self.SetIcon(wx.Icon('bitmaps/file_edit.png'))
         self.conn = conn
         self.path = path
         self.parent = parent
@@ -685,7 +686,7 @@ class file_edit(wx.Frame):
         self.SetSizer(bSizer1)
         self.Layout()
 
-        self.Centre(wx.BOTH)
+        self.CenterOnScreen()
 
         self.Bind(wx.EVT_MENU, self.onMenuSave, id=101)
         self.Bind(wx.EVT_MENU, self.onMenuQuit, id=102)
@@ -715,7 +716,7 @@ class file_edit(wx.Frame):
                 mMessageBox('upload %s faild' % self.path)
                 logging.error(e)
             os.remove(tmp_path)
-            self.parent.refresh_dir(self.parent.item_sel)
+            self.parent.refresh_dir()
         else:
             with open(self.local_file, "w") as f:
                 f.write(txt.replace('\r', ''))

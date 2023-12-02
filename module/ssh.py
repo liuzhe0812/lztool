@@ -20,6 +20,7 @@ class sshClient():
         self.ssh = paramiko.SSHClient()
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.worker = None
+        self.scp_path = None
 
     def connect(self, timeout=globals.timeout,server=False):
         "server是云桌面服务器"
