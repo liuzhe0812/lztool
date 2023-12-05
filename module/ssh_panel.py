@@ -922,13 +922,12 @@ class scp_panel(wx.Panel):
 
         sizer1 = wx.BoxSizer(wx.HORIZONTAL)
         self.cur_path = None
-        self.tc_path = wx.TextCtrl(self, value='/', size=(300, -1),
-                                   style=wx.NO_BORDER
+        self.tc_path = wx.TextCtrl(self, value='',style=wx.BORDER_SIMPLE
                                          | wx.TE_PROCESS_ENTER)
         self.Bind(wx.EVT_TEXT_ENTER, self.onPathEnter, self.tc_path)
 
         self.tc_path.SetForegroundColour(wx.Colour(150, 150, 150))
-        self.tc_path.SetFont(wx.Font(wx.Font(11, 70, 90, 90, False, '微软雅黑')))
+        self.tc_path.SetFont(wx.Font(wx.Font(9, 70, 90, 90, False, '微软雅黑')))
         bt_refresh = mBitmapButton(self, 'bitmaps/refresh.png', '刷新')
         bt_back = mBitmapButton(self, 'bitmaps/ssh_back.png', '上级目录')
         bt_down = mBitmapButton(self, 'bitmaps/download.png', '下载')
@@ -938,28 +937,34 @@ class scp_panel(wx.Panel):
         bt_down.Bind(wx.EVT_BUTTON, self.onDownload)
         bt_up.Bind(wx.EVT_BUTTON, self.onUpload)
 
-        sizer1.Add(self.tc_path, 1, wx.ALIGN_CENTER)
-        sizer1.Add(bt_refresh, 0, wx.ALIGN_CENTER)
-        sizer1.Add(bt_back, 0, wx.ALIGN_CENTER)
-        sizer1.Add(bt_down, 0, wx.ALIGN_CENTER)
-        sizer1.Add(bt_up, 0, wx.ALIGN_CENTER)
-        sizer_main.Add(sizer1, 0, wx.EXPAND)
+        sizer1.Add(bt_refresh)
+        sizer1.Add(bt_back)
+        sizer1.Add(bt_down)
+        sizer1.Add(bt_up)
+        sizer_main.Add(sizer1)
+        sizer_main.Add(self.tc_path, 0, wx.EXPAND)
 
         self.file_tree = mHyperTreeList(self,
-                                        cols=['名称', '大小', '类型', '修改时间', '权限', '用户/用户组'])
+                                        cols=['名称', '大小', '类型', '修改时间', '权限', '用户/用户组'],show_header=False)
         self.file_tree.setColumnWidth([220, 60, 60, 100, 100, 100])
+        self.file_tree.SetWindowStyle(wx.NO_BORDER)
         sizer_main.Add(self.file_tree, 1, wx.EXPAND)
 
-        self.bmp_folder = wx.ArtProvider.GetBitmap(wx.ART_FOLDER, wx.ART_TOOLBAR, (16, 16))
-        self.bmp_file = wx.ArtProvider.GetBitmap(wx.ART_NORMAL_FILE, wx.ART_TOOLBAR, (16, 16))
-        self.bmp_dir_up = wx.ArtProvider.GetBitmap(wx.ART_GO_DIR_UP, wx.ART_TOOLBAR, (16, 16))
-        self.file_tree.setImageList([self.bmp_folder, self.bmp_file, self.bmp_dir_up])
+        bmp_folder = wx.ArtProvider.GetBitmap(wx.ART_FOLDER, wx.ART_TOOLBAR, (16, 16))
+        bmp_file = wx.ArtProvider.GetBitmap(wx.ART_NORMAL_FILE, wx.ART_TOOLBAR, (16, 16))
+        bmp_dir_up = wx.ArtProvider.GetBitmap(wx.ART_GO_DIR_UP, wx.ART_TOOLBAR, (16, 16))
+        bmp_file_compress = wx.Bitmap('bitmaps/file_compress.png', wx.BITMAP_TYPE_PNG)
+        bmp_file_config = wx.Bitmap('bitmaps/file_config.png', wx.BITMAP_TYPE_PNG)
+        self.file_tree.setImageList(
+            [bmp_folder, bmp_file, bmp_dir_up, bmp_file_config, bmp_file_compress])
         self.file_tree.root = self.file_tree.AddRoot('..', image=2)
         self.item_sel = self.file_tree.root
 
+        self.file_tree.GetMainWindow().Bind(wx.EVT_LEFT_DOWN, self.onClick)
         self.file_tree.GetMainWindow().Bind(wx.EVT_LEFT_DCLICK, self.onDClick)
         self.file_tree.GetMainWindow().Bind(wx.EVT_RIGHT_UP, self.onRightUp)
         self.file_tree.GetMainWindow().Bind(wx.EVT_MOTION, self.OnMouseMove)
+        self.file_tree.GetMainWindow().Bind(wx.EVT_LEAVE_WINDOW, self.OnLeaveFileTree)
         self.file_tree.Bind(wx.EVT_TREE_END_LABEL_EDIT, self.onLabelEdit)
 
     def init_file_tree(self):
@@ -993,11 +998,15 @@ class scp_panel(wx.Panel):
         else:
             self.tooltip_frame.Hide()
 
+    def OnLeaveFileTree(self, evv):
+        if self.tooltip_frame.IsShown():
+            self.tooltip_frame.Hide()
+
     def onRefresh(self, evt):
         self.refresh_dir()
 
     def onBackDir(self, evt):
-        path = self.tc_path.GetValue()
+        path = self.get_remote_path()
         p_list = path.split('/')[1:-1]
         cur_path = ''
         if not p_list:
@@ -1018,11 +1027,18 @@ class scp_panel(wx.Panel):
         local_path = methods.get_config('ssh', 'download_path')
         if not os.path.exists(local_path):
             os.makedirs(local_path)
-        self.ssh_panel.ShowSSHMenu()
         start_new_thread(self.download, (local_path, remote_path))
+        self.ssh_panel.ShowSSHMenu()
+
+    def get_remote_path(self):
+        if self.conn.scp_path == '/':
+            return ''
+        else:
+            return self.conn.scp_path
+
 
     def onUpload(self, evt):
-        remote_path = self.tc_path.GetValue()
+        remote_path = self.get_remote_path()
         dlg = file_choice()
         dlg.st_path.SetLabel(remote_path)
         if dlg.ShowModal() == wx.ID_OK:
@@ -1065,6 +1081,7 @@ class scp_panel(wx.Panel):
                     conn.gauge.SetValue(0, path.split('\\')[-1])
                     conn.upload(path, remote_path_map[path], gauge=True)
                 conn.gauge.SetValue(100, '无')
+                self.sftp.close()
             except Exception as e:
                 logging.error(e)
                 continue
@@ -1222,34 +1239,62 @@ class scp_panel(wx.Panel):
         files.sort(reverse=True)
 
         for file in files[1:]:
-            filename = ''
             if not file:
                 continue
             info = file.strip().split(' ')
             info = [item for item in info if item != '']
 
-            # 处理文件名带空格的情况
-            filename = info[8]
-            if len(info) >= 10:
+            try:   #没权限导致显示？的文件直接跳过
+                filename = info[8]
+            except:
+                continue
+
+            if len(info) >= 10:  # 处理文件名带空格的情况
                 for item in info[9:]:
-                    filename += ' %s'%item
+                    filename += ' %s' % item
             child = self.file_tree.AppendItem(self.file_tree.root, filename)
             self.file_tree.SetItemText(child, info[4], 1)
-            if not info[0][0] == 'd':
-                self.file_tree.SetItemText(child, '文件', 2)
-                self.file_tree.SetItemImage(child, 1)
-            else:
+            type = info[0][0]
+            if type == 'd':
                 self.file_tree.SetItemText(child, '目录', 2)
                 self.file_tree.SetItemImage(child, 0)
+            else:
+                self.file_tree.SetItemText(child, '文件', 2)
+                if filename.endswith('.conf'):
+                    self.file_tree.SetItemImage(child, 3)
+                elif filename.endswith('.tar') or filename.endswith('zip'):
+                    self.file_tree.SetItemImage(child, 4)
+                else:
+                    self.file_tree.SetItemImage(child, 1)
+
             self.file_tree.SetItemText(child, info[5] + info[6] + ' ' + info[7], 3)
             self.file_tree.SetItemText(child, info[0], 4)
             self.file_tree.SetItemText(child, info[2] + '/' + info[3], 5)
             child.SetData(
-                info[-1]+'  '+info[4] + ' ' + info[5] + info[6] + '日 ' + info[7] + ' ' + info[2] + ':' + info[3] + ' ' + info[0])
+                info[-1] + '  ' + info[4] + ' ' + info[5] + " " + info[6] + ' ' + info[7] + ' ' + info[2] + ':' + info[
+                    3] + ' ' + info[0])
 
     def getItemPath(self, item):
-        path = item.GetText()
-        return self.conn.scp_path + '/%s' % path
+        if self.conn.scp_path == '/':
+            cur_path = ''
+        else:
+            cur_path = self.conn.scp_path
+        if not item == self.file_tree.root:
+            path = item.GetText()
+            return cur_path + '/%s' % path
+        else:
+            return cur_path
+
+    def onClick(self, event):
+        pt = event.GetPosition()
+        item = self.file_tree.HitTest(pt)[0]
+        if not item:
+            return
+        elif item == self.file_tree.root:
+            self.item_sel = None
+        else:
+            self.item_sel = item
+
 
     def onDClick(self, event):
         pt = event.GetPosition()
@@ -1390,15 +1435,18 @@ class scp_panel(wx.Panel):
         elif txt == '上传':
             self.onUpload(None)
         elif txt == '下载':
+            self.ssh_panel.ShowSSHMenu()
             remote_path = path
             local_path = methods.get_config('ssh', 'download_path')
             if not os.path.exists(local_path):
                 os.makedirs(local_path)
-            self.ssh_panel.ShowSSHMenu()
             start_new_thread(self.download, (local_path, remote_path))
         elif txt == '编辑':
             path = self.getItemPath(self.item_sel)
-            txt = self.conn.recv('cat %s' % path)
+            try:
+                txt = self.conn.recv('cat %s' % path)
+            except:
+                return
             frm = file_edit(self, path, self.conn, txt.replace('\r', ''), title=path)
             frm.Show()
 
@@ -1499,7 +1547,7 @@ class command_panel(wx.Panel):
         self.init_cmds()
         self.Layout()
 
-    def OnKeyPressed(self,event):
+    def OnKeyPressed(self, event):
         if event.GetKeyCode() == 13 and event.ControlDown():
             self.send_cmd()
         event.Skip()

@@ -56,11 +56,14 @@ class sshClient():
         p = 100 * curent / total
         self.gauge.SetValue(p)
 
-    def get_sftp(self):
+    def get_sftp_bak(self):
         self.tran = paramiko.Transport((self.host, int(self.port)))
         self.tran.connect(username=self.username, password=self.password)
         sftp = paramiko.SFTPClient.from_transport(self.tran)
         return sftp
+
+    def get_sftp(self):
+        return self.ssh.open_sftp()
 
     def upload(self, local, remote, gauge=False):
         sftp = self.get_sftp()
@@ -70,13 +73,11 @@ class sshClient():
             sftp.put(local, remote)
         sftp.close()
         self.done = 1
-        self.tran.close()
 
     def download(self, local, remote):
         sftp = self.get_sftp()
         sftp.get(remote, local)
         sftp.close()
-        self.tran.close()
 
     def send(self, command):
         self.channel.send(command + '\n')

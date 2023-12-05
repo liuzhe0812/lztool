@@ -306,12 +306,13 @@ class mListCtrl(wx.ListCtrl, listmix.TextEditMixin, listmix.ListCtrlAutoWidthMix
 
 class mHyperTreeList(HTL.HyperTreeList):
     def __init__(self, parent, cols=None,
-                 agwStyle=None):
+                 show_header=True):
         HTL.HyperTreeList.__init__(self, parent, id=wx.ID_ANY,
                                    agwStyle=HTL.TR_AUTO_CHECK_CHILD
                                             | HTL.TR_AUTO_CHECK_PARENT
                                             | wx.TR_HAS_VARIABLE_ROW_HEIGHT)
-
+        if not show_header:
+            self.SetAGWWindowStyleFlag(HTL.TR_NO_HEADER)
         self.root = None
         self.EnableSelectionVista(True)
         for col in cols:
@@ -1193,7 +1194,8 @@ class SSH_ULC(ULC.UltimateListCtrl, listmix.ListCtrlAutoWidthMixin):
     def OnPopupMenu(self, evt):
         txt = getLabelFromEVT(evt)
         if txt == '清除':
-            self.DeleteItem(self.selected)
+            if self.selected:
+                self.DeleteItem(self.selected)
         elif txt == '清除全部':
             self.DeleteAllItems()
         elif txt == '打开文件路径':

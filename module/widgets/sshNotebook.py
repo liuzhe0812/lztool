@@ -5493,7 +5493,6 @@ class PageContainer(wx.Panel):
 
         :param `page`: an integer specifying the page index.
         """
-
         book = self.GetParent()
         book.DeletePage(page)
         book.Refresh()

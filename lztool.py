@@ -3,7 +3,7 @@
 __authur__ = u'liuzhe'
 __version__ = '4.0'
 
-import logging, wx.grid, sys,os,configparser,wx.grid,wx.aui
+import logging, wx.grid, sys,os,configparser,wx.grid
 import module.widgets.rectshapedbitmapbuttonTwo as SBBTwo
 from module import panels,ssh_panel,cloud_panel
 from module.myui import *
@@ -11,7 +11,6 @@ from webssh import wssh
 from module import methods
 from module.dialogs import config_dlg
 from module.dialogs import file_edit as LOGEDIT
-import wx.lib.agw.aui as aui
 
 
 class MyTitleBar(wx.Control):
@@ -434,8 +433,8 @@ class Myframe(wx.Frame):
                                     title="",
                                     style=style)
         # ------------
-        self._mgr = aui.AuiManager()
-        self._mgr.SetManagedWindow(self)
+        # self._mgr = aui.AuiManager()
+        # self._mgr.SetManagedWindow(self)
         self.SetBackgroundColour('white')
         self.opacity_out = 255
         self.deltaN = -70
@@ -584,8 +583,8 @@ class Myframe(wx.Frame):
         dlg.Destroy()
 
     def OnClose(self, event):
-        self._mgr.UnInit()
-        del self._mgr
+        # self._mgr.UnInit()
+        # del self._mgr
         event.Skip()
 
 class LogFrame(LOGEDIT):
