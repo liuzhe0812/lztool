@@ -302,50 +302,6 @@ class sshclient_list(mListCtrl):
         self.list = []
 
 
-class open_connect(wx.Dialog):
-    def __init__(self):
-        wx.Dialog.__init__(self, None, -1, size=(500, 400), title="")
-        self.SetBackgroundColour(wx.Colour(255, 255, 255))
-        self.SetSizeHints(wx.DefaultSize, wx.DefaultSize)
-
-        bSizer1 = wx.BoxSizer(wx.VERTICAL)
-        bSizer2 = wx.BoxSizer(wx.HORIZONTAL)
-
-        self.bt_new = mPlateBtn(self, '新建', 'bitmaps/new.png')
-        self.bt_save = mPlateBtn(self, '另存', 'bitmaps/save.png')
-        self.bt_property = mPlateBtn(self, '属性', 'bitmaps/property.png')
-        self.bt_delete = mPlateBtn(self, '删除', 'bitmaps/delete.png')
-
-        bSizer2.Add(self.bt_new, 0, wx.TOP, 5)
-        bSizer2.Add(self.bt_save, 0, wx.LEFT | wx.TOP, 5)
-        bSizer2.Add(self.bt_property, 0, wx.LEFT | wx.TOP, 5)
-        bSizer2.Add(self.bt_delete, 0, wx.LEFT | wx.TOP, 5)
-        bSizer2.Add((0, 0), 1, wx.EXPAND, 5)
-
-        bSizer1.Add(bSizer2, 0, wx.EXPAND | wx.LEFT, 5)
-
-        cols = ['名称', '起始IP', '端口', '数量', '用户名', '描述']
-        self.listCtrl = sshclient_list(self, cols)
-        self.listCtrl.SetColumnWidth(1, 110)
-        self.listCtrl.SetColumnWidth(2, 60)
-        self.listCtrl.SetColumnWidth(3, 60)
-        self.listCtrl.create_listctrl()
-        bSizer1.Add(self.listCtrl, 1, wx.ALL | wx.EXPAND, 5)
-
-        self.SetSizer(bSizer1)
-        self.Layout()
-
-        self.Centre(wx.BOTH)
-
-        self.bt_new.Bind(wx.EVT_BUTTON, self.listCtrl.new_sshclient)
-        self.bt_save.Bind(wx.EVT_BUTTON, self.listCtrl.save_sshclient)
-        self.bt_delete.Bind(wx.EVT_BUTTON, self.listCtrl.delete_sshclient)
-        self.bt_property.Bind(wx.EVT_BUTTON, self.listCtrl.edit_sshclient)
-
-    def on_close(self, evt):
-        self.Destroy()
-
-
 class transfer(wx.Dialog):
     def __init__(self, host):
         wx.Dialog.__init__(self, None, -1, title="文件传输")
@@ -647,8 +603,8 @@ class file_chmod(wx.Dialog):
 
 
 class file_edit(wx.Frame):
-    def __init__(self, parent=None, path=None, conn=None, txt=None, local_file=None,title=''):
-        wx.Frame.__init__(self, parent=parent, size=(800, 600),title=title)
+    def __init__(self, parent=None, path=None, conn=None, txt=None, local_file=None, title=''):
+        wx.Frame.__init__(self, parent=parent, size=(800, 600), title=title)
         self.SetIcon(wx.Icon('bitmaps/file_edit.png'))
         self.conn = conn
         self.path = path
@@ -698,7 +654,7 @@ class file_edit(wx.Frame):
         self.Bind(wx.EVT_FIND_REPLACE_ALL, self.OnReplaceAll)
         self.Bind(wx.EVT_FIND_CLOSE, self.OnFindClose)
 
-    def SetText(self,txt):
+    def SetText(self, txt):
         self.stc.SetText(txt)
 
     def onMenuSave(self, evt):
@@ -1324,7 +1280,6 @@ class get_info_dlg(wx.Dialog):
 
         self.check_intf = self.select_int.GetValue()
         cmd = "grep %s /proc/net/dev | awk '{print $2,$10}';echo $[10#$(date +%%d%%M%%S%%N)/1000000]" % self.check_intf
-        print(cmd)
         re = self.conn.recv(cmd)
         re = re.strip().split('\n')
         if len(re) != 1:
@@ -1626,15 +1581,18 @@ class file_choice(wx.Dialog):
         self.bt_ok = wx.Button(self, id=wx.ID_OK, size=(40, -1), label="确定")
         self.bt_cancel = wx.Button(self, id=wx.ID_CANCEL, size=(40, -1), label="取消")
 
-        linebt.Add(txt1, 0, wx.LEFT | wx.ALIGN_CENTER, 10)
-        linebt.Add(self.st_path, 0, wx.ALIGN_CENTER)
-        linebt.Add((-1, -1), 1)
+        linebt.Add((-1,-1),1)
         linebt.Add(self.cb_rootlimit, 0, wx.ALIGN_CENTER)
         linebt.Add(self.cb_multi, 0, wx.ALIGN_CENTER)
         linebt.Add(self.bt_ok, 0, wx.RIGHT, 5)
         linebt.Add(self.bt_cancel, 0, wx.RIGHT, 10)
 
-        sizer.Add(linebt, 0, wx.EXPAND | wx.BOTTOM | wx.TOP, 10)
+        sizer_path = wx.BoxSizer(wx.HORIZONTAL)
+        sizer_path.Add(txt1, 0, wx.ALIGN_CENTER)
+        sizer_path.Add(self.st_path, 0, wx.ALIGN_CENTER)
+
+        sizer.Add(sizer_path, 0, wx.EXPAND | wx.TOP | wx.LEFT, 5)
+        sizer.Add(linebt, 0, wx.EXPAND | wx.BOTTOM | wx.LEFT, 5)
 
         self.Layout()
 

@@ -1,6 +1,8 @@
 # encoding=utf-8
 __author__ = 'LiuZhe'
 
+import time
+
 import paramiko,logging
 from module import globals
 from module.myui import mMessageBox
@@ -26,11 +28,17 @@ class sshClient():
         "server是云桌面服务器"
         print("connect %s: %s %s" % (self.host, self.username, self.password))
         self.ssh.connect(self.host, username=self.username, password=self.password,timeout=timeout)
+
         if server:
             self.channel = self.ssh.invoke_shell()
         else:
             self.channel = self.ssh.invoke_shell(term='xterm')
             self.channel.setblocking(0)
+
+        if self.username == globals.vdi_user:
+            self.channel.send('su\n')
+            time.sleep(1)
+            self.channel.send(globals.vdi_root_pwd + '\n')
 
     def server_connect(self):
         self.username = globals.vdi_user

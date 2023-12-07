@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-import wx.grid, wx.aui, wx.stc as stc,time
+import wx.grid, wx.aui, wx.stc as stc
 import wx.lib.mixins.listctrl as listmix
 import wx.lib.agw.ultimatelistctrl as ULC
-import wx.lib.platebtn as platebtn
 import wx.lib.agw.hypertreelist as HTL
 import wx.lib.agw.labelbook as LB
 import wx.lib.gizmos as gizmos
@@ -154,35 +153,6 @@ class mFocusButton(wx.Button):
             self.SetBackgroundColour(self.bg_colour)
 
 
-class mPlateBtn(platebtn.PlateButton):
-    def __init__(self, parent, label="", imagePath=None, color=None, font=None, gradient=True, toggle=False, menu=None):
-        style = platebtn.PB_STYLE_DEFAULT
-        if gradient:
-            style = style | platebtn.PB_STYLE_GRADIENT
-        if toggle:
-            style = style | platebtn.PB_STYLE_TOGGLE
-
-        if gradient:
-            platebtn.PlateButton.__init__(self, parent=parent, id=wx.ID_ANY, label=label, style=style)
-        else:
-            platebtn.PlateButton.__init__(self, parent=parent, id=wx.ID_ANY, label=label, style=style)
-        if imagePath:
-            bmp = wx.Image(imagePath, wx.BITMAP_TYPE_PNG).ConvertToBitmap()
-            self.SetBitmap(bmp)
-        if color:
-            self.SetPressColor(color)
-        if font:
-            self.SetFont(font)
-        if menu:
-            mMenu = wx.Menu()
-            for s in menu:
-                mMenu.Append(wx.ID_ANY, s)
-            self.SetMenu(mMenu)
-
-    def setMenuEvent(self, method):
-        self.Bind(wx.EVT_MENU, method)
-
-
 class mButtonSimple(wx.Button):
     def __init__(self, parent, label="", b_color=None, size=(-1, -1), id=wx.ID_ANY, font=(10, True),
                  f_color=(44, 151, 250)):
@@ -209,7 +179,10 @@ class mButtonSimple(wx.Button):
 
 class mBitmapButton(buttons.GenBitmapButton):
     def __init__(self, parent, bmp_path, tooltip=''):
-        bmp = wx.Bitmap(bmp_path, wx.BITMAP_TYPE_PNG)
+        if isinstance(bmp_path,str):
+            bmp = wx.Bitmap(bmp_path, wx.BITMAP_TYPE_PNG)
+        else:
+            bmp = bmp_path
         buttons.GenBitmapButton.__init__(self, parent, -1, bmp, style=wx.NO_BORDER)
         self.SetBackgroundColour(parent.GetBackgroundColour())
         self.SetToolTip(tooltip)

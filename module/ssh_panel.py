@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-import logging, shutil, threadpool, wx.grid, wx.aui, pyperclip, base64, stat, configparser, os, re
-from time import sleep
+import logging, shutil, threadpool, wx.grid, wx.aui, pyperclip, base64, stat, configparser, os, re,time
 from _thread import start_new_thread
 from .myui import *
 from functools import reduce
 from module import methods, dialogs, globals, ssh
+from module.widgets import platebtn
 from wx.html2 import WebView
 from module.dialogs import add_cmd_dlg, file_chmod, file_edit, file_choice, sshclient_list
 from module.methods import getLabelFromEVT, bytes2human
@@ -220,7 +220,6 @@ class ssh_panel(wx.Panel):
     def add_default_page(self, tabctrl=None):
         self.nb_console.Freeze()
         page = DeafaultPage(self.nb_console)
-
         if tabctrl:
             from wx.lib.agw.aui import framemanager
             info = wx.lib.agw.aui.auibook.AuiNotebookPage()
@@ -260,7 +259,7 @@ class ssh_panel(wx.Panel):
         if cur_page.conn and self.panel_scp.conn != cur_page.conn:
             self.set_cur_conn(cur_page.conn)
             self.panel_scp.conn = cur_page.conn
-            self.panel_scp.refresh_dir()
+            start_new_thread(self.panel_scp.refresh_dir,())
 
     def onNotebookPageClose(self, evt):
         '点x时触发，事件完成后才调用DeletePage()，除此之外其他情况不添加default page'
@@ -276,7 +275,6 @@ class ssh_panel(wx.Panel):
             self.deletePageData(self.nb_console.GetPageText(0))
         if default_page:
             self.add_default_page()
-
         self.nb_console.Thaw()
 
     def deletePageData(self, page_label):
@@ -296,6 +294,8 @@ class ssh_panel(wx.Panel):
         self.change_online_count(None)
         self.panel_multi_ssh.Show()
         self.splitter_left.Hide()
+        self.panel_scp.tc_path.SetValue('')
+        self.panel_scp.file_tree.DeleteChildren(self.panel_scp.file_tree.root)
         self.Layout()
 
     def onNotebookTabMenu(self, evt):
@@ -482,7 +482,7 @@ class ssh_panel(wx.Panel):
                 wx.CallAfter(self.add_shell_page, (globals.cur_conn))
                 self.Layout()
             else:
-                self.close_all_ssh(None)
+                wx.CallAfter(self.close_all_ssh,None)
 
     def create_session(self, conn):
         try:
@@ -742,10 +742,6 @@ class DeafaultPage(wx.Panel):
     def create_session(self):
         try:
             self.ssh_panel.create_session(self.conn)
-            if self.ch_hostType.GetSelection() == 0:
-                self.conn.send('su')
-                sleep(0.2)
-                self.conn.send(globals.vdi_root_pwd)
             page_idx = self.Parent.GetPageIndex(self)
             self.Parent.DeletePage(page_idx)
         except Exception as e:
@@ -932,22 +928,35 @@ class scp_panel(wx.Panel):
         bt_back = mBitmapButton(self, 'bitmaps/ssh_back.png', '上级目录')
         bt_down = mBitmapButton(self, 'bitmaps/download.png', '下载')
         bt_up = mBitmapButton(self, 'bitmaps/upload.png', '上传')
+        bt_newdir = mBitmapButton(self, wx.ArtProvider.GetBitmap(wx.ART_NEW_DIR, wx.ART_MENU, size=(18, 18)), '新建目录')
+        bt_newfile = mBitmapButton(self, wx.ArtProvider.GetBitmap(wx.ART_NEW, wx.ART_MENU, size=(16, 16)), '新建文件')
+        bt_show_all = platebtn.PlateButton(self, wx.ID_ANY, '', wx.Bitmap('bitmaps/file_showall.png',wx.BITMAP_TYPE_PNG),
+                                           style=platebtn.PB_STYLE_DEFAULT | platebtn.PB_STYLE_TOGGLE)
+        bt_show_all.SetToolTip('显示隐藏')
         bt_refresh.Bind(wx.EVT_BUTTON, self.onRefresh)
         bt_back.Bind(wx.EVT_BUTTON, self.onBackDir)
         bt_down.Bind(wx.EVT_BUTTON, self.onDownload)
         bt_up.Bind(wx.EVT_BUTTON, self.onUpload)
+        bt_newfile.Bind(wx.EVT_BUTTON, self.onNewFile)
+        bt_newdir.Bind(wx.EVT_BUTTON, self.onNewDir)
+        bt_show_all.Bind(wx.EVT_TOGGLEBUTTON,self.onShowHiden)
 
         sizer1.Add(bt_refresh)
         sizer1.Add(bt_back)
         sizer1.Add(bt_down)
         sizer1.Add(bt_up)
-        sizer_main.Add(sizer1)
+        sizer1.Add(bt_newdir)
+        sizer1.Add(bt_newfile)
+        sizer1.Add((-1,-1),1)
+        sizer1.Add(bt_show_all,0,wx.ALIGN_CENTER)
+        sizer_main.Add(sizer1,0,wx.EXPAND)
         sizer_main.Add(self.tc_path, 0, wx.EXPAND)
 
         self.file_tree = mHyperTreeList(self,
                                         cols=['名称', '大小', '类型', '修改时间', '权限', '用户/用户组'],show_header=False)
         self.file_tree.setColumnWidth([220, 60, 60, 100, 100, 100])
         self.file_tree.SetWindowStyle(wx.NO_BORDER)
+        self.file_tree.SetAGWWindowStyleFlag(HTL.TR_FULL_ROW_HIGHLIGHT)
         sizer_main.Add(self.file_tree, 1, wx.EXPAND)
 
         bmp_folder = wx.ArtProvider.GetBitmap(wx.ART_FOLDER, wx.ART_TOOLBAR, (16, 16))
@@ -972,7 +981,6 @@ class scp_panel(wx.Panel):
             self.conn.scp_path = '/root'
         else:
             self.conn.scp_path = '/home/%s' % self.conn.username
-        self.tc_path.SetValue(self.conn.scp_path)
         self.refresh_dir()
         self.file_tree.Expand(self.file_tree.root)
 
@@ -981,7 +989,6 @@ class scp_panel(wx.Panel):
 
     def goto_dir(self, path):
         self.conn.scp_path = path
-        self.tc_path.SetValue(path)
         self.refresh_dir()
 
     def OnMouseMove(self, event):
@@ -1016,6 +1023,35 @@ class scp_panel(wx.Panel):
                 cur_path += '/%s' % p
         self.goto_dir(cur_path)
 
+    def onNewFile(self,evt):
+        dlg = wx.TextEntryDialog(None, '创建路径：%s\n文件名称' % self.conn.scp_path, '新建文件')
+        if dlg.ShowModal() == wx.ID_OK:
+            name = dlg.GetValue()
+            path = self.conn.scp_path + '/' + name
+            frm = file_edit(self, path, self.conn, title=path)
+            frm.Show()
+        dlg.Destroy()
+
+    def onNewDir(self,evt):
+        dlg = wx.TextEntryDialog(None, '创建路径：%s\n文件夹名称' % self.conn.scp_path, '新建文件夹')
+        if dlg.ShowModal() == wx.ID_OK:
+            name = dlg.GetValue()
+            path = self.conn.scp_path + '/' + name
+            try:
+                self.conn.recv('mkdir %s' % path)
+            except Exception as e:
+                mMessageBox(e)
+            self.refresh_dir()
+        dlg.Destroy()
+
+    def onShowHiden(self,evt):
+        if evt.GetEventObject()._pressed:
+            self.show_hiden = True
+        else:
+            self.show_hiden = False
+        if self.conn:
+            self.refresh_dir()
+
     def onDownload(self, evt):
         remote_path = self.getItemPath(self.item_sel)
         dlg = dialogs.mWarnDlg('下载的文件或目录路径：%s' % remote_path)
@@ -1031,15 +1067,17 @@ class scp_panel(wx.Panel):
         self.ssh_panel.ShowSSHMenu()
 
     def get_remote_path(self):
-        if self.conn.scp_path == '/':
-            return ''
+        if not self.conn:
+            return
         else:
             return self.conn.scp_path
-
 
     def onUpload(self, evt):
         remote_path = self.get_remote_path()
         dlg = file_choice()
+        if evt == None:
+            dlg.cb_multi.SetValue(False)
+            dlg.cb_multi.Hide()
         dlg.st_path.SetLabel(remote_path)
         if dlg.ShowModal() == wx.ID_OK:
             local_paths = dlg.dirCtrl.GetPaths()
@@ -1065,7 +1103,6 @@ class scp_panel(wx.Panel):
                 continue
             if rootlimit:
                 conn.send('mount -o remount,rw /')
-            self.sftp = conn.get_sftp()
             remote_path_map = {}
             for path in local_paths:  # 遍历所有文件
                 if os.path.isdir(path):
@@ -1081,7 +1118,6 @@ class scp_panel(wx.Panel):
                     conn.gauge.SetValue(0, path.split('\\')[-1])
                     conn.upload(path, remote_path_map[path], gauge=True)
                 conn.gauge.SetValue(100, '无')
-                self.sftp.close()
             except Exception as e:
                 logging.error(e)
                 continue
@@ -1124,7 +1160,10 @@ class scp_panel(wx.Panel):
             else:
                 if os.path.getsize(path) == 0:
                     continue
-                remote_path = remote + '/' + path.split('\\')[-1]
+                if remote == '/':
+                    remote_path = remote + path.split('\\')[-1]
+                else:
+                    remote_path = remote + '/' + path.split('\\')[-1]
                 idx = self.ssh_panel.ssh_menu.ulc_ssh.addItem(remote_path, 0)
                 path_map[idx] = [path, remote_path]
         for index in path_map.keys():  # 逐个上传
@@ -1147,10 +1186,7 @@ class scp_panel(wx.Panel):
             self.sftp.close()
             self.ssh_panel.sftp_status = False
         path_map.clear()
-        if self.item_sel.GetImage() == 0:
-            self.refresh_dir()
-        else:
-            self.refresh_dir()
+        self.refresh_dir()
 
     def download(self, local, remote):
         basic_path = '/'.join(remote.split('/')[:-1])
@@ -1229,15 +1265,21 @@ class scp_panel(wx.Panel):
         return sftp.stat(path).st_size
 
     def refresh_dir(self):
-        self.file_tree.DeleteChildren(self.file_tree.root)
-        path = self.conn.scp_path
+        cur_host = self.conn.host
+        if self.conn.scp_path:
+            # 这个if去掉，第一次打开控制台有未知报错
+            self.tc_path.SetValue(self.conn.scp_path)
         if self.show_hiden:
-            cmd = "ls -AhlL %s" % path
+            cmd = "ls -AhlL %s" % self.conn.scp_path
         else:
-            cmd = 'ls -hlL %s' % path
-        files = self.conn.recv(cmd).split('\n')
-        files.sort(reverse=True)
+            cmd = 'ls -hlL %s' % self.conn.scp_path
 
+        files = self.conn.recv(cmd).split('\n')
+        if cur_host != self.conn.host:
+            # 防止快速切换后线程执行顺序错乱
+            return
+        files.sort(reverse=True)
+        self.file_tree.DeleteChildren(self.file_tree.root)
         for file in files[1:]:
             if not file:
                 continue
@@ -1294,7 +1336,6 @@ class scp_panel(wx.Panel):
             self.item_sel = None
         else:
             self.item_sel = item
-
 
     def onDClick(self, event):
         pt = event.GetPosition()
@@ -1382,7 +1423,8 @@ class scp_panel(wx.Panel):
 
     def onFilePopupMenu(self, evt):
         txt = getLabelFromEVT(evt)
-        path = self.getItemPath(self.item_sel)
+        if self.item_sel:
+            path = self.getItemPath(self.item_sel)
         if txt == '刷新':
             self.refresh_dir()
 
@@ -1393,24 +1435,9 @@ class scp_panel(wx.Panel):
         elif txt == '复制路径':
             pyperclip.copy(path)
         elif txt == '新建目录':
-            dlg = wx.TextEntryDialog(None, '创建路径：%s\n文件夹名称' % self.conn.scp_path, '新建文件夹')
-            if dlg.ShowModal() == wx.ID_OK:
-                name = dlg.GetValue()
-                path = self.conn.scp_path + '/' + name
-                try:
-                    self.conn.recv('mkdir %s' % path)
-                except Exception as e:
-                    mMessageBox(e)
-                self.refresh_dir()
-            dlg.Destroy()
+            self.onNewDir(None)
         elif txt == '新建文件':
-            dlg = wx.TextEntryDialog(None, '创建路径：%s\n文件名称' % self.conn.scp_path, '新建文件')
-            if dlg.ShowModal() == wx.ID_OK:
-                name = dlg.GetValue()
-                path = self.conn.scp_path + '/' + name
-                frm = file_edit(self, path, self.conn, title=path)
-                frm.Show()
-            dlg.Destroy()
+            self.onNewFile(None)
         elif txt == '重命名':
             self.file_tree.EditLabel(self.item_sel)
         elif txt == '删除':
