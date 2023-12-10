@@ -442,13 +442,22 @@ class IndexHandler(MixinHandler, tornado.web.RequestHandler):
     def ssh_connect(self, args):
         "args:('172.31.13.51', 22, 'Cloud_r00t', 'Vdi&Voi@r00t', None)"
         dst_addr = args[:2]
-
-        if args[0] in globals.multi_ssh_conn and not globals.multi_ssh_conn[args[0]].console:
-            # 不是复制，直接使用批量对象中的channel
-            globals.multi_ssh_conn[args[0]].console = True
-            ssh = globals.multi_ssh_conn[args[0]].ssh
-            chan = globals.multi_ssh_conn[args[0]].channel
+        conn = globals.multi_ssh_conn[args[0]]
+        if not conn.console:
+            # 没开控制台（不是复制），直接使用批量对象中的channel
+            conn.console = True
+            ssh = conn.ssh
+            chan = conn.channel
+        elif conn.console and not conn.channel.get_transport().is_active():
+            # 控制台打开，连接断开
+            try:
+                conn.connect(int(globals.timeout))
+                ssh = conn.ssh
+                chan = conn.channel
+            except Exception as e:
+                raise e
         else:
+            # 复制
             ssh = self.ssh_client
             logging.info('Web Connecting to {}:{}'.format(*dst_addr))
             try:

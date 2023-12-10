@@ -21,7 +21,6 @@ class sshClient():
         self.idx = idx
         self.ssh = paramiko.SSHClient()
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.worker = None
         self.scp_path = None
 
     def connect(self, timeout=globals.timeout,server=False):
@@ -58,7 +57,6 @@ class sshClient():
         except Exception as e:
             mMessageBox(str(e))
             raise
-
 
     def show_process(self, curent, total):
         p = 100 * curent / total

@@ -580,6 +580,7 @@ class ssh_panel(wx.Panel):
                 else:
                     self.add_shell_page(conn)
             else:
+                self.tree_session.SetItemImage(self.treeNode_dict[self.link_selected], self.redball)
                 mMessageBox('连接状态异常！')
         elif item.GetItemLabel() == '删除':
             if globals.multi_ssh_conn[ip].linkok():
@@ -954,7 +955,7 @@ class scp_panel(wx.Panel):
 
         self.file_tree = mHyperTreeList(self,
                                         cols=['名称', '大小', '类型', '修改时间', '权限', '用户/用户组'],show_header=False)
-        self.file_tree.setColumnWidth([220, 60, 60, 100, 100, 100])
+        self.file_tree.setColumnWidth([220, 60, 50, 100, 80, 135])
         self.file_tree.SetWindowStyle(wx.NO_BORDER)
         self.file_tree.SetAGWWindowStyleFlag(HTL.TR_FULL_ROW_HIGHLIGHT)
         sizer_main.Add(self.file_tree, 1, wx.EXPAND)
@@ -982,7 +983,7 @@ class scp_panel(wx.Panel):
         else:
             self.conn.scp_path = '/home/%s' % self.conn.username
         self.refresh_dir()
-        self.file_tree.Expand(self.file_tree.root)
+        # self.file_tree.Expand(self.file_tree.root)
 
     def onPathEnter(self, evt):
         self.goto_dir(self.tc_path.GetValue())
@@ -1075,9 +1076,6 @@ class scp_panel(wx.Panel):
     def onUpload(self, evt):
         remote_path = self.get_remote_path()
         dlg = file_choice()
-        if evt == None:
-            dlg.cb_multi.SetValue(False)
-            dlg.cb_multi.Hide()
         dlg.st_path.SetLabel(remote_path)
         if dlg.ShowModal() == wx.ID_OK:
             local_paths = dlg.dirCtrl.GetPaths()
@@ -1315,6 +1313,7 @@ class scp_panel(wx.Panel):
             child.SetData(
                 info[-1] + '  ' + info[4] + ' ' + info[5] + " " + info[6] + ' ' + info[7] + ' ' + info[2] + ':' + info[
                     3] + ' ' + info[0])
+        self.file_tree.Expand(self.file_tree.root)
 
     def getItemPath(self, item):
         if self.conn.scp_path == '/':
