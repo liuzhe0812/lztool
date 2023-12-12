@@ -254,7 +254,6 @@ class AuiMDIParentFrame(wx.Frame):
 
 
     def Tile(self, orient=wx.HORIZONTAL):
-
         client_window = self.GetClientWindow()
         if not client_window:
             raise Exception("Missing MDI Client Window")

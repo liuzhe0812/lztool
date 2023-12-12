@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
-__authur__ = u'liuzhe'
+__authur__ = 'liuzhe'
 __version__ = '4.0'
 
 import logging, wx.grid, sys,os,configparser,wx.grid
-import module.widgets.rectshapedbitmapbuttonTwo as SBBTwo
+from module.widgets.TabContainer import TabContainer
 from module import panels,ssh_panel,cloud_panel
 from module.myui import *
 from webssh import wssh
@@ -13,168 +13,32 @@ from module.dialogs import config_dlg
 from module.dialogs import file_edit as LOGEDIT
 
 
-class MyTitleBar(wx.Control):
-    def __init__(self, parent, label):
+class MyMenuBar(wx.Panel):
+    def __init__(self, parent):
         style = (wx.BORDER_NONE)
-        super(MyTitleBar, self).__init__(parent,
-                                         style=style)
+        super(wx.Panel, self).__init__(parent,style=style)
 
         self.bitmaps_dir = wx.GetApp().GetBitmapsDir()
 
         self.parent = parent
-        self.label = label
 
         self.SetBackground()
-        # self.SetProperties(label)
         self.CreateCtrls()
         self.DoLayout()
         self.BindEvents()
-
-    # -----------------------------------------------------------------------
 
     def SetBackground(self):
         self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
         self.SetBackgroundColour(wx.WHITE)
 
-    def SetProperties(self, label):
-        """
-        ...
-        """
-
-        self.label = label
-        self.label_font = self.GetFont()
-        self.label_font.SetFamily(wx.SWISS)
-        self.label_font.SetWeight(wx.BOLD)
-        self.SetFont(self.label_font)
-
     def CreateCtrls(self):
-        # Load an icon bitmap for titlebar.
-        icon = wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                      "logo.png"),
-                         type=wx.BITMAP_TYPE_PNG)
-
-        self.ico = wx.StaticBitmap(self, -1, icon)
-        self.ico.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
-
-        self.appname = wx.StaticText(self,label=self.TopLevelParent.app_name)
-        self.appname.SetFont(wx.Font(15, 70, 90, 90, False, "微软雅黑"))
-        self.appname.SetForegroundColour('grey')
-
-        self.bt_showlog = SBBTwo.ShapedBitmapButton(self, -1,
-                                                   bitmap=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                                 "showlog.png"),
-                                                                    type=wx.BITMAP_TYPE_PNG),
-
-                                                   pressedBmp=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                                     "showlog_pressed.png"),
-                                                                        type=wx.BITMAP_TYPE_PNG),
-                                                   label="",
-                                                   labelForeColour=wx.WHITE,
-                                                   labelFont=wx.Font(9,
-                                                                     wx.FONTFAMILY_DEFAULT,
-                                                                     wx.FONTSTYLE_NORMAL,
-                                                                     wx.FONTWEIGHT_BOLD),
-                                                   style=wx.BORDER_NONE)
-
-        self.bt_config = SBBTwo.ShapedBitmapButton(self, -1,
-                                              bitmap=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                            "config.png"),
-                                                               type=wx.BITMAP_TYPE_PNG),
-
-                                              pressedBmp=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                                "config_pressed.png"),
-                                                                   type=wx.BITMAP_TYPE_PNG),
-                                              label="",
-                                              labelForeColour=wx.WHITE,
-                                              labelFont=wx.Font(9,
-                                                                wx.FONTFAMILY_DEFAULT,
-                                                                wx.FONTSTYLE_NORMAL,
-                                                                wx.FONTWEIGHT_BOLD),
-                                              style=wx.BORDER_NONE)
-
-        self.btn3 = SBBTwo.ShapedBitmapButton(self, -1,
-                                              bitmap=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                            "btn_gloss_exit_normal_1.png"),
-                                                               type=wx.BITMAP_TYPE_PNG),
-
-                                              pressedBmp=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                                "btn_gloss_exit_selected_1.png"),
-                                                                   type=wx.BITMAP_TYPE_PNG),
-
-                                              hoverBmp=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                              "btn_gloss_exit_normal_1.png"),
-                                                                 type=wx.BITMAP_TYPE_PNG),
-
-                                              disabledBmp=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                                 "btn_gloss_exit_normal_1.png"),
-                                                                    type=wx.BITMAP_TYPE_PNG),
-
-                                              label="",
-                                              labelForeColour=wx.WHITE,
-                                              labelFont=wx.Font(9,
-                                                                wx.FONTFAMILY_DEFAULT,
-                                                                wx.FONTSTYLE_NORMAL,
-                                                                wx.FONTWEIGHT_BOLD),
-                                              style=wx.BORDER_NONE)
-
-        self.btn4 = SBBTwo.ShapedBitmapButton(self, -1,
-                                              bitmap=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                            "btn_gloss_maximize_normal_1.png"),
-                                                               type=wx.BITMAP_TYPE_PNG),
-
-                                              pressedBmp=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                                "btn_gloss_maximize_selected_1.png"),
-                                                                   type=wx.BITMAP_TYPE_PNG),
-
-                                              hoverBmp=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                              "btn_gloss_maximize_normal_1.png"),
-                                                                 type=wx.BITMAP_TYPE_PNG),
-
-                                              disabledBmp=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                                 "btn_gloss_maximize_normal_1.png"),
-                                                                    type=wx.BITMAP_TYPE_PNG),
-
-                                              label="",
-                                              labelForeColour=wx.WHITE,
-                                              labelFont=wx.Font(9,
-                                                                wx.FONTFAMILY_DEFAULT,
-                                                                wx.FONTSTYLE_NORMAL,
-                                                                wx.FONTWEIGHT_BOLD),
-                                              style=wx.BORDER_NONE)
-
-        self.btn5 = SBBTwo.ShapedBitmapButton(self, -1,
-                                              bitmap=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                            "btn_gloss_reduce_normal_1.png"),
-                                                               type=wx.BITMAP_TYPE_PNG),
-
-                                              pressedBmp=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                                "btn_gloss_reduce_selected_1.png"),
-                                                                   type=wx.BITMAP_TYPE_PNG),
-
-                                              hoverBmp=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                              "btn_gloss_reduce_normal_1.png"),
-                                                                 type=wx.BITMAP_TYPE_PNG),
-
-                                              disabledBmp=wx.Bitmap(os.path.join(self.bitmaps_dir,
-                                                                                 "btn_gloss_reduce_normal_1.png"),
-                                                                    type=wx.BITMAP_TYPE_PNG),
-
-                                              label="",
-                                              labelForeColour=wx.WHITE,
-                                              labelFont=wx.Font(9,
-                                                                wx.FONTFAMILY_DEFAULT,
-                                                                wx.FONTSTYLE_NORMAL,
-                                                                wx.FONTWEIGHT_BOLD),
-                                              style=wx.BORDER_NONE)
+        self.bt_split = mBitmapButton(self,'bitmaps/split.png','分屏显示')
+        self.bt_showlog = mBitmapButton(self,'bitmaps/showlog.png','错误日志')
+        self.bt_config = mBitmapButton(self,'bitmaps/config.png','设置')
+        self.bt_transfer_menu = mBitmapButton(self,'bitmaps/transfer_menu.png','传输列表')
 
     def DoLayout(self):
         mainSizer = wx.BoxSizer(wx.HORIZONTAL)
-
-        # ------------
-
-        mainSizer.Add(self.ico, 0, wx.LEFT|wx.TOP , 4)
-        mainSizer.Add(self.appname, 0, wx.LEFT|wx.TOP , 4)
-
         self._tab = TabContainer(self,size=(270,40))
         self._tab.AddImage('bitmaps/multissh2.png','bitmaps/multissh1.png')
         self._tab.AddImage('bitmaps/oevdi2.png','bitmaps/oevdi1.png')
@@ -183,15 +47,13 @@ class MyTitleBar(wx.Control):
         self._tab.AddPage('桌面云',0,1)
         self._tab.AddPage('工具箱',0,2)
         self._tab._nIndex = 0
-        mainSizer.Add(self._tab,0,wx.EXPAND|wx.LEFT,10)
+        mainSizer.Add(self._tab,0,wx.ALIGN_BOTTOM|wx.LEFT,2)
+        mainSizer.Add((1,-1),1,wx.EXPAND)
 
-
-        mainSizer.Add((0, 0), 1)
-        mainSizer.Add(self.bt_showlog, 0, wx.RIGHT, 4)
-        mainSizer.Add(self.bt_config, 0, wx.RIGHT, 4)
-        mainSizer.Add(self.btn5, 0, wx.RIGHT, 4)
-        mainSizer.Add(self.btn4, 0, wx.RIGHT, 4)
-        mainSizer.Add(self.btn3, 0, wx.RIGHT, 4)
+        mainSizer.Add(self.bt_split, 0, wx.LEFT|wx.ALIGN_CENTER, 5)
+        mainSizer.Add(self.bt_showlog, 0, wx.ALIGN_CENTER)
+        mainSizer.Add(self.bt_config, 0,wx.ALIGN_CENTER)
+        mainSizer.Add(self.bt_transfer_menu, 0,wx.ALIGN_CENTER)
 
         # ------------
 
@@ -199,176 +61,14 @@ class MyTitleBar(wx.Control):
         self.Layout()
 
     def BindEvents(self):
-        # self.ico.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
-        # self.ico.Bind(wx.EVT_LEFT_DOWN, self.OnRightDown)
-
         self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
-        self.Bind(wx.EVT_LEFT_DCLICK, self.OnDLeft)
-
-        self.btn3.Bind(wx.EVT_BUTTON, self.OnBtnClose)
-        self.btn4.Bind(wx.EVT_BUTTON, self.OnFullScreen)
-        self.btn5.Bind(wx.EVT_BUTTON, self.OnIconfiy)
-
-    def OnDLeft(self,evt):
-        self.OnFullScreen(None)
-
-    def OnLeftDown(self, event):
-        self.GetTopLevelParent().OnLeftDown(event)
-
-    def OnLeftUp(self, event):
-        self.GetTopLevelParent().OnLeftUp(event)
-
-    def DoGetBestSize(self):
-        """
-        ...
-        """
-
-        dc = wx.ClientDC(self)
-        dc.SetFont(self.GetFont())
-
-        textWidth, textHeight = dc.GetTextExtent(self.label)
-        spacing = 10
-        totalWidth = textWidth + (spacing)
-        totalHeight = textHeight + (spacing)
-
-        best = wx.Size(totalWidth, totalHeight)
-        self.CacheBestSize(best)
-
-        return best
-
-    def GetLabel(self):
-        """
-        ...
-        """
-
-        return self.label
-
-    def GetLabelColor(self):
-        """
-        ...
-        """
-
-        return self.foreground
-
-    def GetLabelSize(self):
-        """
-        ...
-        """
-
-        return self.size
-
-    def SetLabelColour(self, colour):
-        """
-        ...
-        """
-
-        self.labelColour = colour
 
     def OnPaint(self, event):
-        """
-        ...
-        """
+        "消除残影"
         dc = wx.BufferedPaintDC(self)
         gcdc = wx.GCDC(dc)
         gcdc.Clear()
 
-        # Get the working size we can draw in.
-        # width, height = self.GetSize()
-
-        # Use the GCDC to draw the text.
-        # brush = wx.WHITE
-        # gcdc.SetPen(wx.Pen(brush, 1))
-        # gcdc.SetBrush(wx.Brush(brush))
-        # gcdc.DrawRectangle(0, 0, width, height)
-
-        # # Get the system font.
-        # gcdc.SetFont(self.GetFont())
-        #
-        # textWidth, textHeight = gcdc.GetTextExtent(self.label)
-        # tposx, tposy = ((width / 2) - (textWidth / 2), (height / 3) - (textHeight / 3))#居中
-        #
-        # # Set position and text color.
-        # if tposx <= 100:
-        #     gcdc.SetTextForeground("white")
-        #     gcdc.DrawText("", int(tposx), int(tposy + 1))
-        #
-        #     gcdc.SetTextForeground(self.labelColour)
-        #     gcdc.DrawText("", int(tposx), int(tposy))
-        #
-        # else:
-        #     gcdc.SetTextForeground("white")
-        #     gcdc.DrawText(self.label, int(tposx), int(tposy + 1))
-        #
-        #     gcdc.SetTextForeground(self.labelColour)
-        #     gcdc.DrawText(self.label, int(tposx), int(tposy))
-
-    def OnIconfiy(self, event):
-        """
-        ...
-        """
-
-        self.GetTopLevelParent().OnIconfiy(self)
-
-    def OnFullScreen(self, event):
-        """
-        ...
-        """
-
-        self.GetTopLevelParent().OnFullScreen(self)
-
-    def OnBtnClose(self, event):
-        self.GetTopLevelParent().OnCloseWindow(self)
-
-class MyTitleBarPnl(wx.Panel):
-    """
-    Thanks to Cody Precord.
-    """
-
-    def __init__(self, parent, id=-1, size=(-1,40)):
-        style = (wx.NO_BORDER)
-        super(MyTitleBarPnl, self).__init__(parent,
-                                            id=-1,
-                                            size=size,
-                                            style=style)
-
-        self.parent = parent
-
-        self.config = wx.GetApp().GetConfig()
-        self.app_name = wx.GetApp().GetAppName()
-        self.bitmaps_dir = wx.GetApp().GetBitmapsDir()
-
-        self.SetProperties()
-        self.CreateCtrls()
-        self.BindEvents()
-
-    # -----------------------------------------------------------------------
-
-    def SetProperties(self):
-        self.SetBackgroundColour('white')
-
-    def CreateCtrls(self):
-        w, h = self.GetClientSize()
-
-        self.titleBar = MyTitleBar(self,
-                                   label=self.app_name)
-        self.titleBar.SetPosition((0, 0))
-        self.titleBar.SetSize((w, 24))
-        self.titleBar.SetLabelColour("grey")
-
-        bsizer = wx.BoxSizer(wx.VERTICAL)
-        bsizer.Add(self.titleBar, 1, wx.EXPAND)
-        self.SetSizer(bsizer)
-
-    def BindEvents(self):
-        self.Bind(wx.EVT_SIZE, self.OnResize)
-
-    def OnResize(self, event):
-        w, h = self.GetClientSize()
-        self.titleBar.SetSize((w, 24))
-        self.Refresh()
-        self.Layout()
 
 class MyMainPnl(wx.Panel):
 
@@ -382,7 +82,6 @@ class MyMainPnl(wx.Panel):
         #主面板
         self.panel_ssh = ssh_panel.ssh_panel(self)
         self.panel_ssh.SetBackgroundColour(globals.bgcolor)
-        # self.panel_ssh.panel_multi_ssh.Show()
         self.panel_ssh.splitter_left.Hide()
 
         self.panel_tools = panels.tool_panel(self)
@@ -416,29 +115,25 @@ class MyMainPnl(wx.Panel):
         for p in self._panels:
             bSizer1.Add(p, 1, wx.EXPAND)
         self.SetSizer(bSizer1)
-        self.Centre(wx.BOTH)
 
     def SetProperties(self):
-        if wx.Platform == "__WXMSW__":
-            self.SetDoubleBuffered(True)
+        self.SetDoubleBuffered(True)
 
 class Myframe(wx.Frame):
     def __init__(self):
         methods.new_thread(wssh.start, ())
-        style = (wx.CLIP_CHILDREN | wx.CLOSE_BOX |
-                 wx.MINIMIZE_BOX | wx.SYSTEM_MENU |
-                 wx.RESIZE_BORDER | wx.NO_FULL_REPAINT_ON_RESIZE)
+        style = (wx.DEFAULT_FRAME_STYLE|wx.CLIP_CHILDREN)
         super(wx.Frame, self).__init__(None,
                                     -1, size=(1024, 720),
                                     title="",
                                     style=style)
         # ------------
-        # self._mgr = aui.AuiManager()
-        # self._mgr.SetManagedWindow(self)
         self.SetBackgroundColour('white')
+        self.SetIcon(wx.Icon('bitmaps/logo.png'))
         self.opacity_out = 255
         self.deltaN = -70
         self.delta = wx.Point(0, 0)
+        self.ssh_menu = SSHPopupWindow(self, wx.SIMPLE_BORDER)
 
         self.config = wx.GetApp().GetConfig()
         # Return application name.
@@ -447,7 +142,7 @@ class Myframe(wx.Frame):
 
         self.Freeze()
         self.CreateCtrls()
-        self.CreateStatus()
+        self.CreateInfoBar()
         self.DoLayout()
         self.BindEvents()
         rect = self.config.get('default','last_rect').split(',')
@@ -480,83 +175,40 @@ class Myframe(wx.Frame):
 
     def SetProperties(self):
         self.SetTitle(self.app_name)
-        self.SetMinSize((258, 58))
+        self.SetMinSize((600, 400))
 
     def BindEvents(self):
-        self.titleBarPnl.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.titleBarPnl.titleBar.bt_showlog.Bind(wx.EVT_BUTTON, self.OnShowLog)
-        self.titleBarPnl.titleBar.bt_config.Bind(wx.EVT_BUTTON, self.OnConfig)
-        self.titleBarPnl.titleBar._tab.Bind(wx.EVT_LEFT_DOWN, self.OnTabMouseLeftDown)
-
-        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
-        self.Bind(wx.EVT_MOTION, self.OnMouseMove)
-        self.Bind(wx.EVT_CLOSE, self.OnCloseWindow)
+        self.menubarPnl.bt_showlog.Bind(wx.EVT_BUTTON, self.OnShowLog)
+        self.menubarPnl.bt_config.Bind(wx.EVT_BUTTON, self.OnConfig)
+        self.menubarPnl._tab.Bind(wx.EVT_LEFT_DOWN, self.OnTabMouseLeftDown)
 
 
     def CreateCtrls(self):
-        self.titleBarPnl = MyTitleBarPnl(self)
-        self.titleBarPnl.SetPosition((0, 0))
+        self.menubarPnl = MyMenuBar(self)
         self.mainPnl = MyMainPnl(self)
 
-    def CreateStatus(self):
+    def CreateInfoBar(self):
         # 消息弹窗
         self.info = wx.InfoBar(self)
 
     def DoLayout(self):
         mainSizer = wx.BoxSizer(wx.VERTICAL)
 
-        mainSizer.Add(self.titleBarPnl, 0, wx.EXPAND, 0)
+        mainSizer.Add(self.menubarPnl, 0, wx.EXPAND, 0)
         mainSizer.Add(self.mainPnl, 1, wx.EXPAND, 0)
         mainSizer.Add(self.info, 0, wx.EXPAND, 0)
 
         self.SetSizer(mainSizer)
         self.Layout()
 
-    def Message(self, msg):
+    def Message(self, msg, type=0):
         flags = [wx.ICON_NONE, wx.ICON_WARNING, wx.ICON_ERROR]
-        self.info.ShowMessage(msg, flags[0])
+        self.info.ShowMessage(msg, flags[type])
 
     def OnTabMouseLeftDown(self,event):
-        self.titleBarPnl.titleBar._tab.OnMouseLeftDown(event)
-        self.mainPnl.SelectPanel(self.titleBarPnl.titleBar._tab._tabSel)
+        self.menubarPnl._tab.OnMouseLeftDown(event)
+        self.mainPnl.SelectPanel(self.menubarPnl._tab._tabSel)
         event.Skip()
-
-    def OnLeftDown(self, event):
-        self.CaptureMouse()
-        x, y = self.ClientToScreen(event.GetPosition())
-        originx, originy = self.GetPosition()
-        dx = x - originx
-        dy = y - originy
-        self.delta = ((dx, dy))
-
-    def OnLeftUp(self, evt):
-        if self.HasCapture():
-            self.ReleaseMouse()
-
-    def OnMouseMove(self, event):
-        """
-        ...
-        """
-
-        if event.Dragging() and event.LeftIsDown():
-            x, y = self.ClientToScreen(event.GetPosition())
-            fp = (x - self.delta[0], y - self.delta[1])
-            self.Move(fp)
-
-    def OnCloseWindow(self, event):
-        pos = self.GetPosition()
-        size = self.GetSize()
-        val =  str(pos[0])+','+str(pos[1])+','+str(size[0])+','+str(size[1])
-        self.config.set('default', 'last_rect',val)
-        self.config.write(open('config.ini', "r+"))
-        self.Destroy()
-
-    def OnFullScreen(self, event):
-        self.ShowFullScreen(not self.IsFullScreen(),
-                            wx.FULLSCREEN_NOCAPTION)
-
-    def OnIconfiy(self, event):
-        self.Iconize()
 
     def OnShowLog(self,evt):
         logframe = LogFrame()
@@ -582,10 +234,6 @@ class Myframe(wx.Frame):
             self.config.write(open('config.ini', "w"))
         dlg.Destroy()
 
-    def OnClose(self, event):
-        # self._mgr.UnInit()
-        # del self._mgr
-        event.Skip()
 
 class LogFrame(LOGEDIT):
     def __init__(self):

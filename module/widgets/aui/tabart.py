@@ -136,7 +136,7 @@ class AuiDefaultTabArt(object):
 
         self.SetDefaultColours()
 
-        active_colour, disabled_colour = wx.BLACK, wx.Colour(128, 128, 128)
+        active_colour, disabled_colour = wx.Colour(108,155,207), wx.Colour(128, 128, 128)
 
         if wx.Platform == "__WXMAC__":
             bmp_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DDKSHADOW)
@@ -196,22 +196,21 @@ class AuiDefaultTabArt(object):
          is generated accordingly to the platform and theme.
         """
 
-        if base_colour is None:
-            base_colour = GetBaseColour()
 
-        self.SetBaseColour(base_colour)
-        self._border_colour = StepColour(base_colour, 75)
-        self._border_pen = wx.Pen(self._border_colour)
+        self.SetBaseColour(wx.Colour(157,189,221))  # 底色
+        self._border_colour = wx.Pen(wx.Colour(165, 165, 165, 255))  # 边框
+        self._border_pen = wx.Pen(wx.Colour(165, 165, 165, 255))    # 边框
 
-        self._background_top_colour = StepColour(base_colour, 90)
-        self._background_bottom_colour = StepColour(base_colour, 170)
 
-        self._tab_top_colour = base_colour
-        self._tab_bottom_colour = wx.WHITE
-        self._tab_gradient_highlight_colour = wx.WHITE
+        self._background_top_colour = wx.Colour(255,255,255)        # tab栏背景
+        self._background_bottom_colour = wx.Colour(255,255,255)     # tab栏背景渐变
 
-        self._tab_inactive_top_colour = base_colour
-        self._tab_inactive_bottom_colour = StepColour(self._tab_inactive_top_colour, 160)
+        self._tab_top_colour = wx.Colour(157,189,221)       # 选中tab
+        self._tab_bottom_colour = wx.Colour(157,189,221)    # 选中tab
+        self._tab_gradient_highlight_colour = wx.Colour(177,209,241)    # 选中tab渐变
+
+        self._tab_inactive_top_colour = wx.WHITE        # 非选中tab背景
+        self._tab_inactive_bottom_colour = wx.WHITE     # 非选中tab背景渐变
 
         self._tab_text_colour = lambda page: page.text_colour
         self._tab_disabled_text_colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)

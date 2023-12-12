@@ -4300,7 +4300,6 @@ class AuiManager(wx.EvtHandler):
                          CenterPane().PaneBorder(False))
 
         elif isinstance(self._frame, tabmdi.AuiMDIParentFrame):
-
             mdi_frame = self._frame
             client_window = mdi_frame.GetClientWindow()
 

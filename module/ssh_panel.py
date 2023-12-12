@@ -34,6 +34,7 @@ class ssh_panel(wx.Panel):
         self.link_ok = 0  # 连接成功数
         self._IsMulti = True
         self.sftp_status = False
+        self.is_split = False
         globals.multi_ssh_conn = {}  # host : {'conn','gauge'}
         self.treeNode_dict = {}  # host : child_id
         self.shellpage_dic = {}  # host : shell_panel
@@ -138,11 +139,8 @@ class ssh_panel(wx.Panel):
         self.nb_console.addTabButtons(AUI_BUTTON_ADD, wx.LEFT,
                                       wx.ArtProvider.GetBitmap(wx.ART_PLUS, wx.ART_TOOLBAR, (20, 20)),
                                       self.onTabButtonAdd)
-        self.nb_console.addTabButtons(AUI_BUTTON_FILETRANSFER, wx.RIGHT,
-                                      wx.ArtProvider.GetBitmap(wx.ART_LIST_VIEW, wx.ART_TOOLBAR, (20, 20)),
-                                      self.onTabButtonSSHMenu)
 
-        self.ssh_menu = SSHPopupWindow(self, wx.SIMPLE_BORDER)
+        self.ssh_menu = self.TopLevelParent.ssh_menu
         self.ssh_menu.st_path.SetLabel(methods.get_config('ssh', 'download_path'))
 
         self.cmd_panel = command_panel(self.ssh_right_panel)
@@ -173,6 +171,8 @@ class ssh_panel(wx.Panel):
         self.tree_session.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.on_tree_item_actived)
         self.Bind(aui.EVT_AUINOTEBOOK_PAGE_CHANGED, self.onNotebookChange, self.nb_console)
         self.Bind(aui.EVT_AUINOTEBOOK_PAGE_CLOSED, self.onNotebookPageClose, self.nb_console)
+        self.TopLevelParent.menubarPnl.bt_transfer_menu.Bind(wx.EVT_BUTTON, self.ShowSSHMenu)
+        self.TopLevelParent.menubarPnl.bt_split.Bind(wx.EVT_BUTTON, self.on_bt_split)
         self.ssh_menu.bt_open.Bind(wx.EVT_BUTTON, self.onOpenDownloadDir)
         self.ssh_menu.bt_cancel.Bind(wx.EVT_BUTTON, self.onSFTPCancel)
 
@@ -192,12 +192,37 @@ class ssh_panel(wx.Panel):
             self.link_ok = i
             wx.CallAfter(self.st_session_count.SetLabel, str(i))
 
-    def ShowSSHMenu(self):
-        rect = self.nb_console.GetRect()
-        pos = self.nb_console.ClientToScreen((rect.width, 0))
+    def ShowSSHMenu(self,evt=None):
+        rect = self.TopLevelParent.menubarPnl.bt_transfer_menu.GetRect()
+        pos = self.TopLevelParent.menubarPnl.bt_transfer_menu.ClientToScreen((rect.width, 0))
         wid = self.ssh_menu.GetSize()[0]
         self.ssh_menu.Position(pos, (-5 - wid, 30))
         self.ssh_menu.Show(True)
+
+    def on_bt_split(self,evt):
+
+        if self.TopLevelParent.mainPnl._sel != 0:
+            return
+        if not self.is_split:
+            n = self.nb_console.GetPageCount()
+            self.nb_console.Freeze()
+            if n < 4:
+                for i in range(n):
+                    if i == 0:
+                        continue
+                    if i == 1:
+                        self.nb_console.Split(i,wx.RIGHT)
+                    if i >1:
+                        self.nb_console.Split(i,wx.DOWN)
+            else:
+                self.nb_console.Split(n-3, wx.RIGHT)
+                self.nb_console.Split(n-2, wx.DOWN)
+                self.nb_console.Split(n-1, wx.DOWN)
+            self.nb_console.Thaw()
+            self.is_split = True
+        else:
+            self.nb_console.UnSplit()
+            self.is_split = False
 
     def onOpenDownloadDir(self, evt):
         path = self.ssh_menu.st_path.GetLabel()
@@ -250,9 +275,6 @@ class ssh_panel(wx.Panel):
         page.listCtrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_linklist_act)
         self.nb_console._PageCount += 1
         self.nb_console.Thaw()
-
-    def onTabButtonSSHMenu(self):
-        self.ShowSSHMenu()
 
     def onNotebookChange(self, evt):
         cur_page = self.nb_console.GetPage(self.nb_console.GetSelection())
@@ -965,8 +987,10 @@ class scp_panel(wx.Panel):
         bmp_dir_up = wx.ArtProvider.GetBitmap(wx.ART_GO_DIR_UP, wx.ART_TOOLBAR, (16, 16))
         bmp_file_compress = wx.Bitmap('bitmaps/file_compress.png', wx.BITMAP_TYPE_PNG)
         bmp_file_config = wx.Bitmap('bitmaps/file_config.png', wx.BITMAP_TYPE_PNG)
+        bmp_file_exec = wx.Bitmap('bitmaps/file_exec.png', wx.BITMAP_TYPE_PNG)
+        bmp_file_py = wx.Bitmap('bitmaps/file_py.png', wx.BITMAP_TYPE_PNG)
         self.file_tree.setImageList(
-            [bmp_folder, bmp_file, bmp_dir_up, bmp_file_config, bmp_file_compress])
+            [bmp_folder, bmp_file, bmp_dir_up, bmp_file_config, bmp_file_compress,bmp_file_exec,bmp_file_py])
         self.file_tree.root = self.file_tree.AddRoot('..', image=2)
         self.item_sel = self.file_tree.root
 
@@ -1300,10 +1324,14 @@ class scp_panel(wx.Panel):
                 self.file_tree.SetItemImage(child, 0)
             else:
                 self.file_tree.SetItemText(child, '文件', 2)
-                if filename.endswith('.conf'):
+                if filename.endswith('.conf') or filename.endswith('cfg'):
                     self.file_tree.SetItemImage(child, 3)
                 elif filename.endswith('.tar') or filename.endswith('zip'):
                     self.file_tree.SetItemImage(child, 4)
+                elif filename.endswith('.bin') or filename.endswith('sh'):
+                    self.file_tree.SetItemImage(child, 5)
+                elif filename.endswith('.py'):
+                    self.file_tree.SetItemImage(child, 6)
                 else:
                     self.file_tree.SetItemImage(child, 1)
 
@@ -1541,6 +1569,7 @@ class command_panel(wx.Panel):
         self.bt_send.Bind(wx.EVT_BUTTON, lambda evt, args=self.send_cmd: start_new_thread(args, ()))
         self.bt_save = wx.Button(pnl_l, label='保存命令')
         self.bt_save.Bind(wx.EVT_BUTTON, self.on_bt_save)
+
         self.bt_sendkeys = wx.Button(pnl_l, label='发送快捷键')
         self.bt_sendkeys.Bind(wx.EVT_BUTTON, self.on_bt_sendkeys)
         self.combo_keys = wx.ComboBox(pnl_l, style=wx.CB_DROPDOWN, size=(-1, 23))

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-# import wx, wx.lib.agw.aui as aui
 import wx, module.widgets.aui as aui
 
 NOTEBOOK_STYLE = aui.AUI_NB_DEFAULT_STYLE \

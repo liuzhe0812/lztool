@@ -5053,6 +5053,7 @@ class AuiNotebook(wx.Panel):
                     insert_idx = dest_tabs.GetIdxFromWindow(target)
 
             else:
+                "没有目标tab则触发split"
                 zero = wx.Point(0, 0)
                 rect = self._mgr.CalculateHintRect(self._dummy_wnd, mouse_client_pt, zero)
 
