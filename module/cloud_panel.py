@@ -63,7 +63,6 @@ class vdi_panel(wx.Panel):
         bSizer2.Add((0, 5))
 
         self.log_panel = vdi_log_panel(self)
-        self.log = self.log_panel.log
 
         self.login_panel = login_panel(self)
         self.server_panel = vdi_server_panel(self)

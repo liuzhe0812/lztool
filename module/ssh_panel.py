@@ -8,7 +8,6 @@ from module.widgets import platebtn
 from wx.html2 import WebView
 from module.dialogs import add_cmd_dlg, file_chmod, file_edit, file_choice, sshclient_list
 from module.methods import getLabelFromEVT, bytes2human
-import wx.lib.agw.flatnotebook as FNB
 from module.widgets import auiNotebook as ANB
 import module.widgets.aui as aui
 import wx.lib.agw.pycollapsiblepane as PCP
@@ -173,6 +172,7 @@ class ssh_panel(wx.Panel):
         self.Bind(aui.EVT_AUINOTEBOOK_PAGE_CLOSED, self.onNotebookPageClose, self.nb_console)
         self.TopLevelParent.menubarPnl.bt_transfer_menu.Bind(wx.EVT_BUTTON, self.ShowSSHMenu)
         self.TopLevelParent.menubarPnl.bt_split.Bind(wx.EVT_BUTTON, self.on_bt_split)
+        self.TopLevelParent.menubarPnl.bt_moniter.Bind(wx.EVT_BUTTON, self.on_bt_moniter)
         self.ssh_menu.bt_open.Bind(wx.EVT_BUTTON, self.onOpenDownloadDir)
         self.ssh_menu.bt_cancel.Bind(wx.EVT_BUTTON, self.onSFTPCancel)
 
@@ -224,6 +224,11 @@ class ssh_panel(wx.Panel):
             self.nb_console.UnSplit()
             self.is_split = False
 
+    def on_bt_moniter(self,evt):
+        conn = self.get_cur_page().conn
+        frm = system_moniter(self,conn.host,conn)
+        frm.Show()
+
     def onOpenDownloadDir(self, evt):
         path = self.ssh_menu.st_path.GetLabel()
         os.startfile(path)
@@ -241,6 +246,9 @@ class ssh_panel(wx.Panel):
 
     def onTabButtonAdd(self):
         self.add_default_page(self.nb_console.active_button_tab)
+
+    def get_cur_page(self):
+        return self.nb_console.GetPage(self.nb_console.GetSelection())
 
     def add_default_page(self, tabctrl=None):
         self.nb_console.Freeze()
@@ -434,6 +442,11 @@ class ssh_panel(wx.Panel):
     def create_connect(self, evt):
         '批量连接'
         info = self.get_ssh_info()
+        self.num.SetValue(info[0])
+        self.host.SetValue(info[1])
+        self.port.SetValue(info[2])
+        self.username.SetValue(info[3])
+        self.password.SetValue(info[4])
         self.DeleteAllPages(False)
         self.start_connect(info)
         if self.CB_save.GetValue():
@@ -507,6 +520,11 @@ class ssh_panel(wx.Panel):
                 wx.CallAfter(self.close_all_ssh,None)
 
     def create_session(self, conn):
+        self.num.SetValue('1')
+        self.host.SetValue(conn.host)
+        self.port.SetValue(str(conn.port))
+        self.username.SetValue(conn.username)
+        self.password.SetValue(conn.password)
         try:
             conn.connect()
         except:
@@ -529,6 +547,11 @@ class ssh_panel(wx.Panel):
         parent = evt.GetEventObject().Parent
         sshclient = evt.GetText()
         info = self.read_ssh_config(sshclient)
+        self.num.SetValue(info[0])
+        self.host.SetValue(info[1])
+        self.port.SetValue(info[2])
+        self.username.SetValue(info[3])
+        self.password.SetValue(info[4])
         self.start_connect(info)
         self.nb_console.DeletePage(self.nb_console.GetPageIndex(parent))
 
@@ -585,14 +608,14 @@ class ssh_panel(wx.Panel):
             conn = globals.multi_ssh_conn[self.link_selected]
             start_new_thread(self.reconnect, (conn,))
         elif item.GetItemLabel() == '断开':
-            if globals.multi_ssh_conn[self.link_selected].linkok():
-                globals.multi_ssh_conn[self.link_selected].close()
+            conn = globals.multi_ssh_conn[self.link_selected]
+            if conn.linkok():
+                conn.close()
                 self.change_online_count(-1)
                 if self.link_ok:
                     self.tree_session.SetItemImage(self.treeNode_dict[self.link_selected], self.redball)
-                if ip in list(self.shellpage_dic.keys()):
-                    self.nb_console.DeletePage(self.nb_console.GetPageIndex(self.shellpage_dic[ip]))
-                    self.shellpage_dic.pop(ip)
+                if conn.console:
+                    self.delete_console_page(conn.host)
         elif item.GetItemLabel() == '控制台':
             conn = globals.multi_ssh_conn[self.link_selected]
             if conn.linkok():
@@ -609,11 +632,14 @@ class ssh_panel(wx.Panel):
                 mMessageBox('不能删除连接中的会话')
             else:
                 self.tree_session.Delete(self.treeNode_dict[ip])
-                globals.multi_ssh_conn.pop(ip)
                 if ip in list(self.shellpage_dic.keys()):
-                    page_idx = self.nb_console.GetPageIndex(self.shellpage_dic[ip])
-                    self.nb_console.DeletePage(page_idx)
-                    self.shellpage_dic.pop(ip)
+                    self.delete_console_page(ip)
+                globals.multi_ssh_conn.pop(ip)
+
+    def delete_console_page(self,ip):
+        self.nb_console.DeletePage(self.nb_console.GetPageIndex(self.shellpage_dic[ip]))
+        self.shellpage_dic.pop(ip)
+        globals.multi_ssh_conn[ip].console = False
 
     def reconnect(self, conn):
         try:
@@ -656,7 +682,6 @@ class ssh_panel(wx.Panel):
         return info
 
 
-# shell界面分割窗
 class shell_panel(wx.Panel):
     def __init__(self, parent, conn):
         wx.Panel.__init__(self, parent=parent)
@@ -799,36 +824,26 @@ class CopyPage(wx.Panel):
         self.browser.LoadURL(url)
 
 
-# 拆分成3个panel
-class shell_notebook(FNB.FlatNotebook):
-    def __init__(self, parent, conn):
-        FNB.FlatNotebook.__init__(self, parent=parent, agwStyle=FNB.FNB_NODRAG | FNB.FNB_FF2
-                                                                | FNB.FNB_NO_X_BUTTON
-                                                                | FNB.FNB_NO_TAB_FOCUS)
-        self.ssh_panel = parent.Parent.Parent
+class system_moniter(wx.Frame):
+    def __init__(self, parent, title,conn):
+        wx.Frame.__init__(self, parent=parent,title=title,
+                          style=wx.DEFAULT_FRAME_STYLE & ~(wx.MINIMIZE_BOX | wx.MAXIMIZE_BOX))
         self.conn = conn
-        self.cmd_on_sel = None
-        self.show_hiden = False
-        self.cmd_bt_dict = {}
-        self.item_sel = None
         self.MONITER_STAT = True
+        self.time_cost = 0
+        self.old_time = 0
+        self.SetBackgroundColour('white')
+        self.SetIcon(wx.Icon('bitmaps/bt_moniter.png'))
 
-        self.panel_cmd = wx.Panel(self)
-        self.panel_moniter = wx.Panel(self)
-        self.panel_moniter.SetBackgroundColour('white')
-        self.AddPage(self.panel_cmd, '命令')
-        self.AddPage(self, '文件')
-        self.AddPage(self.panel_moniter, '系统信息')
-        self.SetFont(wx.Font(10, 70, 90, 92, False, "宋体"))
-
-        self.init_panel_moniter()
-        self.Layout()
+        self.init_panel()
+        self.Bind(wx.EVT_CLOSE,self.on_close)
 
     # 监控窗口
-    def init_panel_moniter(self):
-        sizer_main = wx.BoxSizer(wx.HORIZONTAL)
-        self.panel_moniter.SetSizer(sizer_main)
-        sizer1 = wx.BoxSizer(wx.VERTICAL)  # CPU 内存 运行
+    def init_panel(self):
+        st_width = 80
+
+        sizer1 = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(sizer1)
         s1l0 = wx.BoxSizer(wx.HORIZONTAL)
         s1l1 = wx.BoxSizer(wx.HORIZONTAL)
         s1l2 = wx.BoxSizer(wx.HORIZONTAL)
@@ -840,23 +855,17 @@ class shell_notebook(FNB.FlatNotebook):
         sizer1.Add(s1l3, 0, wx.EXPAND)
         sizer1.Add(s1l4, 0, wx.EXPAND)
 
-        sizer2 = wx.BoxSizer(wx.VERTICAL)
-        sizer3 = wx.BoxSizer(wx.VERTICAL)  #
-        sizer_main.Add(sizer1, 0, wx.EXPAND)
-        sizer_main.Add(sizer2, 0, wx.EXPAND)
-        sizer_main.Add(sizer3, 0, wx.EXPAND)
+        self.gauge_cpu = mGauge(self)
+        self.gauge_mem = mGauge(self)
+        self.gauge_swap = mGauge(self)
+        st_cpu = wx.StaticText(self, label='CPU',size=(st_width,-1),style=wx.ALIGN_RIGHT)
+        st_mem = wx.StaticText(self, label='内存',size=(st_width,-1),style=wx.ALIGN_RIGHT)
+        st_swap = wx.StaticText(self, label='交换',size=(st_width,-1),style=wx.ALIGN_RIGHT)
 
-        self.gauge_cpu = mGauge(self.panel_moniter)
-        self.gauge_mem = mGauge(self.panel_moniter)
-        self.gauge_swap = mGauge(self.panel_moniter)
-        st_cpu = wx.StaticText(self.panel_moniter, label='CPU')
-        st_mem = wx.StaticText(self.panel_moniter, label='内存')
-        st_swap = wx.StaticText(self.panel_moniter, label='交换')
-
-        st_1 = wx.StaticText(self.panel_moniter, label='运行')
-        st_2 = wx.StaticText(self.panel_moniter, label='负载')
-        self.runtime = wx.StaticText(self.panel_moniter, label='')
-        self.load = wx.StaticText(self.panel_moniter, label='')
+        st_1 = wx.StaticText(self, label='运行',size=(st_width,-1),style=wx.ALIGN_RIGHT)
+        st_2 = wx.StaticText(self, label='负载',size=(st_width,-1),style=wx.ALIGN_RIGHT)
+        self.runtime = wx.StaticText(self, label='')
+        self.load = wx.StaticText(self, label='')
 
         s1l0.Add(st_1, 0, wx.TOP | wx.LEFT, 5)
         s1l0.Add(self.runtime, 1, wx.TOP | wx.LEFT, 5)
@@ -864,64 +873,173 @@ class shell_notebook(FNB.FlatNotebook):
         s1l1.Add(self.load, 1, wx.TOP | wx.LEFT, 5)
 
         s1l2.Add(st_cpu, 0, wx.TOP | wx.LEFT, 5)
-        s1l2.Add(self.gauge_cpu, 0, wx.TOP | wx.LEFT, 5)
+        s1l2.Add(self.gauge_cpu, 0, wx.TOP | wx.LEFT|wx.RIGHT, 5)
         s1l3.Add(st_mem, 0, wx.TOP | wx.LEFT, 5)
-        s1l3.Add(self.gauge_mem, 0, wx.TOP | wx.LEFT, 5)
+        s1l3.Add(self.gauge_mem, 0, wx.TOP | wx.LEFT|wx.RIGHT, 5)
         s1l4.Add(st_swap, 0, wx.TOP | wx.LEFT, 5)
-        s1l4.Add(self.gauge_swap, 0, wx.TOP | wx.LEFT, 5)
+        s1l4.Add(self.gauge_swap, 0, wx.TOP | wx.LEFT|wx.RIGHT, 5)
 
-        re = self.conn.recv("cat /proc/stat | head -n 1 | awk '{print $2,$3,$4,$5}'")
-        re = re.strip().split('\n')
-        cpuinfo = re[0].strip().split(' ')
-        self.use_tmp = int(cpuinfo[0]) + int(cpuinfo[1]) + int(cpuinfo[2])
-        self.idle_tmp = int(cpuinfo[3])
+        stat = self.get_stat()
+
+        #time
+        self.old_time = int(stat['time'])
+
+        # cpu
+        self.use_tmp = int(stat['system']['cpu_use'])
+        self.idle_tmp = int(stat['system']['cpu_idle'])
+
+        # disk
+        self.disks = {}
+        disk_info = stat['disk']
+        for disk in disk_info:
+            disk = disk.split(' ')
+            if disk[0].startswith('loop') or disk[0].startswith('sr'):
+                continue
+            gauge = mGauge(self)
+            st_read = wx.StaticText(self,label='/',size=(50,-1))
+            st_write = wx.StaticText(self,label='/',size=(50,-1))
+            st_iops = wx.StaticText(self,label='/',size=(50,-1))
+
+            sizer = wx.BoxSizer(wx.HORIZONTAL)
+            sizer.Add(wx.StaticText(self, label=disk[0],size=(st_width,-1),style=wx.ALIGN_RIGHT),0,wx.TOP | wx.LEFT, 5)
+            sizer.Add(gauge, 0, wx.TOP | wx.LEFT|wx.RIGHT, 5)
+            # sizer.Add(wx.StaticBitmap(self,wx.ID_ANY,wx.Bitmap('bitmaps/upload.png',wx.BITMAP_TYPE_PNG)), 0, wx.TOP | wx.LEFT|wx.RIGHT, 5)
+            sizer.Add(wx.StaticText(self, label='read：'), 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
+            sizer.Add(st_read, 0, wx.TOP | wx.LEFT|wx.RIGHT, 5)
+            sizer.Add(wx.StaticText(self, label='write：'), 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
+            sizer.Add(st_write, 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
+            sizer.Add(wx.StaticText(self, label='iops：'), 0,wx.TOP | wx.LEFT | wx.RIGHT, 5)
+            sizer.Add(st_iops, 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
+
+
+            self.disks[disk[0]] = {
+                'read_io': int(disk[1]),
+                'write_io': int(disk[2]),
+                'read_sectors': int(disk[3]),
+                'write_sectors': int(disk[4]),
+                'io_time': int(disk[5]),
+                'gauge':gauge,
+                'st_read':st_read,
+                'st_write':st_write,
+                'st_iops':st_iops,
+            }
+            sizer1.Add(sizer, 0, wx.EXPAND)
+
+
+        self.Layout()
+        self.SetSize(self.GetBestSize()+(20,20))
+        self.Centre()
+
         start_new_thread(self.momniter, ())
 
-    def momniter(self):
-        time.sleep(1)
+    def get_stat(self):
+        cmd = "cat /proc/net/dev | awk '{print $1,$2,$10}';" \
+              "echo '-separate-';" \
+              "cat /proc/diskstats | awk '{print $3,$4,$8,$6,$10,$13}';" \
+              "echo '-separate-';" \
+              "cat /proc/stat | head -n 1 | awk '{sum = $2 + $3 + $4; print sum,$5}';" \
+              "free | tail -n +2 | awk '{print $2,$3,$7}';" \
+              "uptime;" \
+              "echo '-separate-';" \
+              "echo $[10#$(date +%d%M%S%N)/1000000]"
+        re = self.conn.recv(cmd)
+        re = re.strip().split('-separate-')
+
+        sys_info = re[2].strip().split('\n')
+        sys_stat = {
+            'cpu_use':sys_info[0].split(' ')[0],
+            'cpu_idle':sys_info[0].split(' ')[1],
+            'mem':sys_info[1].split(' '),
+            'swap':sys_info[2].split(' '),
+            'uptime':sys_info[3].split(',')
+        }
+
+        status = {
+            "net":re[0],
+            'disk':re[1].strip().split('\n'),
+            'system':sys_stat,
+            'time':re[3]
+        }
+        return status
+
+    def momniter(self,sec=2):
         while self.MONITER_STAT:
             try:
-                use = self.use_tmp
-                idle = self.idle_tmp
-                cmd = "cat /proc/stat | head -n 1 | awk '{print $2,$3,$4,$5}';" \
-                      "free | tail -n +2 | awk '{print $2,$3,$7}';" \
-                      "uptime"
-                re = self.conn.recv(cmd)
-                re = re.strip().split('\n')
-                cpuinfo = re[0].strip().split(' ')
-                self.use_tmp = int(cpuinfo[0]) + int(cpuinfo[1]) + int(cpuinfo[2])
-                self.idle_tmp = int(cpuinfo[3])
-
-                cpu_use = int(100 * (self.use_tmp - use) / (self.use_tmp - use + self.idle_tmp - idle))
-                self.gauge_cpu.SetValue(cpu_use, '%s%%' % cpu_use)
-
-                mem = re[1].split(' ')
-                mem_use = int(mem[0]) - int(mem[2])
-                mem_tot = int(mem[0])
-                mem_use_per = int(100 * mem_use / mem_tot)
-                mem_use_fit = bytes2human(mem_use, start='K')
-                mem_tot_fit = bytes2human(mem_tot, start='K')
-                self.gauge_mem.SetValue(mem_use_per, '%s%%' % mem_use_per, '%s/%s' % (mem_use_fit, mem_tot_fit))
-
-                swap = re[2].split(' ')
-                swap_use = int(swap[1])
-                swap_tot = int(swap[0])
-                if not swap_tot:
-                    self.gauge_swap.SetValue(0, 'no swap', '')
-                else:
-                    swap_use_per = int(100 * swap_use / swap_tot)
-                    swap_use_fit = bytes2human(swap_use, start='K')
-                    swap_tot_fit = bytes2human(swap_tot, start='K')
-                    self.gauge_swap.SetValue(swap_use_per, '%s%%' % swap_use_per,
-                                             '%s/%s' % (swap_use_fit, swap_tot_fit))
-
-                uptime = re[3].split(',')
-                self.runtime.SetLabel(uptime[0].split('up')[1])
-                self.load.SetLabel(uptime[-3].split(':')[1] + uptime[-2] + uptime[-1])
-                time.sleep(2)
+                stat = self.get_stat()
+                time_now = int(stat['time'])
+                self.time_cost = time_now - self.old_time
+                self.old_time = time_now
+                self.set_system_stat(stat['system'])
+                self.set_disk_stat(stat['disk'])
             except Exception as e:
                 logging.error(e)
+                raise
+            time.sleep(sec)
 
+    def set_system_stat(self,stat):
+        use = self.use_tmp
+        idle = self.idle_tmp
+        self.use_tmp = int(stat['cpu_use'])
+        self.idle_tmp = int(stat['cpu_idle'])
+
+        cpu_use = int(100 * (self.use_tmp - use) / (self.use_tmp - use + self.idle_tmp - idle))
+        self.gauge_cpu.SetValue(cpu_use, '%s%%' % cpu_use)
+
+        mem = stat['mem']
+        mem_use = int(mem[0]) - int(mem[2])
+        mem_tot = int(mem[0])
+        mem_use_per = int(100 * mem_use / mem_tot)
+        mem_use_fit = bytes2human(mem_use, start='K')
+        mem_tot_fit = bytes2human(mem_tot, start='K')
+        self.gauge_mem.SetValue(mem_use_per, '%s%%' % mem_use_per, '%s/%s' % (mem_use_fit, mem_tot_fit))
+
+        swap = stat['swap']
+        swap_use = int(swap[1])
+        swap_tot = int(swap[0])
+        if not swap_tot:
+            self.gauge_swap.SetValue(0, 'no swap', '')
+        else:
+            swap_use_per = int(100 * swap_use / swap_tot)
+            swap_use_fit = bytes2human(swap_use, start='K')
+            swap_tot_fit = bytes2human(swap_tot, start='K')
+            self.gauge_swap.SetValue(swap_use_per, '%s%%' % swap_use_per,
+                                     '%s/%s' % (swap_use_fit, swap_tot_fit))
+
+        uptime = stat['uptime']
+        self.runtime.SetLabel(uptime[0].split('up')[1])
+        self.load.SetLabel(uptime[-3].split(':')[1] + uptime[-2] + uptime[-1])
+
+    def set_disk_stat(self,disk_info):
+        for disk in disk_info:
+            disk = disk.split(' ')
+            if disk[0].startswith('loop') or disk[0].startswith('sr'):
+                continue
+            r_io_old = self.disks[disk[0]]['read_io']
+            w_io_old = self.disks[disk[0]]['write_io']
+            r_sec_old = self.disks[disk[0]]['read_sectors']
+            w_sec_old = self.disks[disk[0]]['write_sectors']
+            io_time_old = self.disks[disk[0]]['io_time']
+            self.disks[disk[0]]['read_io'] = int(disk[1])
+            self.disks[disk[0]]['write_io']= int(disk[2])
+            self.disks[disk[0]]['read_sectors'] = int(disk[3])
+            self.disks[disk[0]]['write_sectors'] = int(disk[4])
+            self.disks[disk[0]]['io_time'] = int(disk[5])
+
+            read_speed = (int(disk[3]) - r_sec_old) * 1000 / self.time_cost / 2
+            read_speed_format = bytes2human(int(read_speed),'K')
+            write_speed = (int(disk[4]) - w_sec_old) * 1000 / self.time_cost / 2
+            write_speed_format = bytes2human(int(write_speed),'K')
+            iops = (int(disk[1]) - r_io_old + int(disk[2]) - w_io_old) * 1000 / self.time_cost
+            busy = (int(disk[5])-io_time_old)*100 / self.time_cost
+            self.disks[disk[0]]['gauge'].SetValue(int(busy),left_str=f'{busy:.1f}%')
+            self.disks[disk[0]]['st_read'].SetLabel(f'{read_speed_format}/s')
+            self.disks[disk[0]]['st_write'].SetLabel(f'{write_speed_format}/s')
+            self.disks[disk[0]]['st_iops'].SetLabel(f'{iops:.0f}')
+
+
+    def on_close(self,evt):
+        self.MONITER_STAT = False
+        self.Destroy()
 
 class scp_panel(wx.Panel):
     def __init__(self, parent, conn):

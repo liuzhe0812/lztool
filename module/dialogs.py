@@ -5,39 +5,6 @@ from module import methods
 from module.myui import *
 
 
-class global_gauge(wx.Dialog):
-    def __init__(self, info):
-        wx.Dialog.__init__(self, None, -1, title="", style=wx.NO_BORDER)
-
-        bSizer1 = wx.BoxSizer(wx.VERTICAL)
-
-        self.info = wx.StaticText(self, wx.ID_ANY, info, wx.DefaultPosition, wx.DefaultSize, 0)
-        self.info.SetFont(wx.Font(12, 70, 90, 92, False, "微软雅黑"))
-        bSizer1.Add(self.info, 0, wx.ALL, 10)
-
-        bSizer2 = wx.BoxSizer(wx.HORIZONTAL)
-
-        self.gauge = wx.Gauge(self, wx.ID_ANY, 100, wx.DefaultPosition, wx.DefaultSize, wx.GA_HORIZONTAL)
-        self.gauge.SetValue(0)
-        bSizer2.Add(self.gauge, 1, wx.LEFT | wx.BOTTOM, 10)
-
-        self.per = wx.StaticText(self, wx.ID_ANY, "", size=(40, -1))
-        bSizer2.Add(self.per, 0, wx.BOTTOM | wx.RIGHT | wx.LEFT, 10)
-
-        bSizer1.Add(bSizer2, 1, wx.EXPAND, 5)
-
-        self.SetSizer(bSizer1)
-
-        self.SetSize(self.GetBestSize())
-        self.Layout()
-
-        self.Centre(wx.BOTH)
-
-    def set_gauge(self, per):
-        self.per.SetLabel(str(per) + '%')
-        self.gauge.SetValue(per)
-
-
 class create_connect(wx.Dialog):
     def __init__(self):
         wx.Dialog.__init__(self, None, -1, title="会话信息")
@@ -300,94 +267,6 @@ class sshclient_list(mListCtrl):
         self.DeleteAllItems()
         self.create_listctrl()
         self.list = []
-
-
-class transfer(wx.Dialog):
-    def __init__(self, host):
-        wx.Dialog.__init__(self, None, -1, title="文件传输")
-        self.SetBackgroundColour(wx.Colour(255, 255, 255))
-        bSizer1 = wx.BoxSizer(wx.VERTICAL)
-
-        bSizer2 = wx.BoxSizer(wx.VERTICAL)
-
-        m_radioBox1Choices = ["批量上传", "下载(%s)" % host]
-        self.m_radioBox1 = wx.RadioBox(self, wx.ID_ANY, "模式", wx.DefaultPosition, wx.DefaultSize,
-                                       m_radioBox1Choices, 2, wx.RA_SPECIFY_COLS)
-        self.m_radioBox1.SetSelection(0)
-        self.m_radioBox1.Bind(wx.EVT_RADIOBOX, self.OnRadio)
-        self.m_radioBox1.SetFont(wx.Font(10, 70, 90, 92, False, "微软雅黑"))
-        bSizer2.Add(self.m_radioBox1, 0, wx.ALL | wx.EXPAND, 5)
-
-        bSizer1.Add(bSizer2, 0, wx.EXPAND, 5)
-
-        sbSizer1 = wx.StaticBoxSizer(wx.StaticBox(self, wx.ID_ANY, "选项"), wx.VERTICAL)
-
-        self.staticText1 = wx.StaticText(sbSizer1.GetStaticBox(), wx.ID_ANY, '选择上传目录', wx.DefaultPosition,
-                                         wx.DefaultSize, 0)
-        sbSizer1.Add(self.staticText1, 0, wx.ALL, 5)
-
-        bSizer4 = wx.BoxSizer(wx.HORIZONTAL)
-        self.remote = wx.TextCtrl(sbSizer1.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition,
-                                  wx.DefaultSize, 0)
-        self.bt_browser = wx.Button(sbSizer1.GetStaticBox(), wx.ID_ANY, "浏览", wx.DefaultPosition, (75, 27),
-                                    0)
-        bSizer4.Add(self.remote, 1, wx.TOP | wx.BOTTOM | wx.ALIGN_CENTER | wx.LEFT, 5)
-        bSizer4.Add(self.bt_browser, 0, wx.ALL, 5)
-        sbSizer1.Add(bSizer4, 0, wx.EXPAND)
-
-        self.staticText2 = wx.StaticText(sbSizer1.GetStaticBox(), wx.ID_ANY, '选择要上传的文件', wx.DefaultPosition,
-                                         wx.DefaultSize, 0)
-        self.staticText2.Wrap(-1)
-        sbSizer1.Add(self.staticText2, 0, wx.ALL, 5)
-        self.staticText1.SetFont(wx.Font(10, 70, 90, 92, False, "微软雅黑"))
-        self.staticText2.SetFont(wx.Font(10, 70, 90, 92, False, "微软雅黑"))
-
-        self.filePicker1 = wx.FilePickerCtrl(sbSizer1.GetStaticBox(), wx.ID_ANY, wx.EmptyString, "选择文件",
-                                             "*.*", wx.DefaultPosition, wx.DefaultSize,
-                                             wx.FLP_DEFAULT_STYLE | wx.NO_BORDER)
-        sbSizer1.Add(self.filePicker1, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 5)
-        self.filePicker1.SetBackgroundColour(wx.Colour(255, 255, 255))
-
-        self.dirPicker1 = wx.DirPickerCtrl(sbSizer1.GetStaticBox(), wx.ID_ANY, wx.EmptyString, "选择目录",
-                                           wx.DefaultPosition, wx.DefaultSize, wx.DIRP_DEFAULT_STYLE | wx.NO_BORDER)
-        self.dirPicker1.Hide()
-        sbSizer1.Add(self.dirPicker1, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 5)
-        self.dirPicker1.SetBackgroundColour(wx.Colour(255, 255, 255))
-
-        bSizer1.Add(sbSizer1, 0, wx.EXPAND, 5)
-
-        bSizer3 = wx.BoxSizer(wx.HORIZONTAL)
-        bSizer3.Add((90, 0))
-        self.bt_ok = mButton(self, "确定", color='deepgreen', id=wx.ID_OK)
-        bSizer3.Add(self.bt_ok, 0, wx.ALIGN_CENTER | wx.ALL, 5)
-        self.bt_cancel = mButton(self, "取消", color='red', id=wx.ID_CANCEL)
-        bSizer3.Add(self.bt_cancel, 0, wx.ALIGN_CENTER | wx.ALL, 5)
-        bSizer1.Add(bSizer3, 0, wx.EXPAND, 5)
-
-        self.SetSizer(bSizer1)
-        self.Layout()
-        bSizer1.Fit(self)
-
-        self.Centre(wx.BOTH)
-        self.SetSize(self.GetBestSize())
-
-        self.selected = 0
-
-    def OnRadio(self, evt):
-        if evt.GetSelection() == 0:
-            self.selected = 0
-            self.staticText1.SetLabel('选择上传目录')
-            self.staticText2.SetLabel('选择要上传的文件')
-            self.dirPicker1.Hide()
-            self.filePicker1.Show()
-            self.Layout()
-        else:
-            self.selected = 1
-            self.staticText1.SetLabel('选择下载文件')
-            self.staticText2.SetLabel('选择目的文件夹')
-            self.dirPicker1.Show()
-            self.filePicker1.Hide()
-            self.Layout()
 
 
 class sql_connect(wx.Dialog):
@@ -1634,8 +1513,15 @@ class config_dlg(wx.adv.PropertySheetDialog):
         sizer2.Add(txt2, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
         sizer2.Add(self.timeout, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
 
+        sizer3 = wx.BoxSizer(wx.HORIZONTAL)
+        txt3 = wx.StaticText(panel, -1, 'webssh端口', size=(80, -1), style=wx.ALIGN_RIGHT)
+        self.wssh_port = wx.TextCtrl(panel, value=globals.wssh_port)
+        sizer3.Add(txt3, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+        sizer3.Add(self.wssh_port, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+
         topSizer.Add(sizer1, 0, wx.EXPAND | wx.ALL, 5)
         topSizer.Add(sizer2, 0, wx.EXPAND | wx.ALL, 5)
+        topSizer.Add(sizer3, 0, wx.EXPAND | wx.ALL, 5)
 
         panel.SetSizer(topSizer)
         return panel
@@ -1668,17 +1554,10 @@ class config_dlg(wx.adv.PropertySheetDialog):
         sizer4.Add(txt4, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
         sizer4.Add(self.mysql_pwd, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
 
-        sizer5 = wx.BoxSizer(wx.HORIZONTAL)
-        txt5 = wx.StaticText(panel, -1, 'webssh端口', size=(80, -1), style=wx.ALIGN_RIGHT)
-        self.wssh_port = wx.TextCtrl(panel, value=globals.wssh_port)
-        sizer5.Add(txt5, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
-        sizer5.Add(self.wssh_port, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
-
         topSizer.Add(sizer1, 0, wx.EXPAND | wx.ALL, 5)
         topSizer.Add(sizer2, 0, wx.EXPAND | wx.ALL, 5)
         topSizer.Add(sizer3, 0, wx.EXPAND | wx.ALL, 5)
         topSizer.Add(sizer4, 0, wx.EXPAND | wx.ALL, 5)
-        topSizer.Add(sizer5, 0, wx.EXPAND | wx.ALL, 5)
 
         panel.SetSizer(topSizer)
         return panel

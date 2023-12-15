@@ -32,6 +32,7 @@ class MyMenuBar(wx.Panel):
         self.SetBackgroundColour(wx.WHITE)
 
     def CreateCtrls(self):
+        self.bt_moniter = mBitmapButton(self,'bitmaps/bt_moniter.png','系统监控')
         self.bt_split = mBitmapButton(self,'bitmaps/split.png','分屏显示')
         self.bt_showlog = mBitmapButton(self,'bitmaps/showlog.png','错误日志')
         self.bt_config = mBitmapButton(self,'bitmaps/config.png','设置')
@@ -50,7 +51,8 @@ class MyMenuBar(wx.Panel):
         mainSizer.Add(self._tab,0,wx.ALIGN_BOTTOM|wx.LEFT,2)
         mainSizer.Add((1,-1),1,wx.EXPAND)
 
-        mainSizer.Add(self.bt_split, 0, wx.LEFT|wx.ALIGN_CENTER, 5)
+        mainSizer.Add(self.bt_moniter, 0, wx.LEFT|wx.ALIGN_CENTER, 5)
+        mainSizer.Add(self.bt_split, 0, wx.ALIGN_CENTER)
         mainSizer.Add(self.bt_showlog, 0, wx.ALIGN_CENTER)
         mainSizer.Add(self.bt_config, 0,wx.ALIGN_CENTER)
         mainSizer.Add(self.bt_transfer_menu, 0,wx.ALIGN_CENTER)
@@ -181,7 +183,7 @@ class Myframe(wx.Frame):
         self.menubarPnl.bt_showlog.Bind(wx.EVT_BUTTON, self.OnShowLog)
         self.menubarPnl.bt_config.Bind(wx.EVT_BUTTON, self.OnConfig)
         self.menubarPnl._tab.Bind(wx.EVT_LEFT_DOWN, self.OnTabMouseLeftDown)
-
+        self.Bind(wx.EVT_CLOSE,self.OnCloseWindow)
 
     def CreateCtrls(self):
         self.menubarPnl = MyMenuBar(self)
@@ -233,6 +235,14 @@ class Myframe(wx.Frame):
             self.config.set('oseasy', 'wssh_port', globals.wssh_port)
             self.config.write(open('config.ini', "w"))
         dlg.Destroy()
+
+    def OnCloseWindow(self, event):
+        pos = self.GetPosition()
+        size = self.GetSize()
+        val =  str(pos[0])+','+str(pos[1])+','+str(size[0])+','+str(size[1])
+        self.config.set('default', 'last_rect',val)
+        self.config.write(open('config.ini', "r+"))
+        self.Destroy()
 
 
 class LogFrame(LOGEDIT):

@@ -442,22 +442,42 @@ class IndexHandler(MixinHandler, tornado.web.RequestHandler):
     def ssh_connect(self, args):
         "args:('172.31.13.51', 22, 'Cloud_r00t', 'Vdi&Voi@r00t', None)"
         dst_addr = args[:2]
-        conn = globals.multi_ssh_conn[args[0]]
-        if not conn.console:
-            # 没开控制台（不是复制），直接使用批量对象中的channel
-            conn.console = True
-            ssh = conn.ssh
-            chan = conn.channel
-        elif conn.console and not conn.channel.get_transport().is_active():
-            # 控制台打开，连接断开
-            try:
-                conn.connect(int(globals.timeout))
+        if args[0] in globals.multi_ssh_conn:
+            conn = globals.multi_ssh_conn[args[0]]
+            if not conn.console:
+                # 没开控制台（不是复制），直接使用批量对象中的channel
+                conn.console = True
                 ssh = conn.ssh
                 chan = conn.channel
-            except Exception as e:
-                raise e
+            elif conn.console and not conn.channel.get_transport().is_active():
+                # 控制台打开，连接断开
+                try:
+                    conn.connect(int(globals.timeout))
+                    ssh = conn.ssh
+                    chan = conn.channel
+                except Exception as e:
+                    raise e
+            else:
+                # 复制
+                ssh = self.ssh_client
+                logging.info('Web Connecting to {}:{}'.format(*dst_addr))
+                try:
+                    ssh.connect(*args, timeout=int(globals.timeout))
+                except socket.error:
+                    raise ValueError('Unable to connect to {}:{}'.format(*dst_addr))
+                except paramiko.BadAuthenticationType:
+                    raise ValueError('Bad authentication type.')
+                except paramiko.AuthenticationException:
+                    raise ValueError('Authentication failed.')
+                except paramiko.BadHostKeyException:
+                    raise ValueError('Bad host key.')
+                chan = ssh.invoke_shell(term='xterm')
+                chan.setblocking(0)
+                if args[2] == 'Cloud_r00t':
+                    chan.send('su\n')
+                    sleep(1)
+                    chan.send(globals.vdi_root_pwd + '\n')
         else:
-            # 复制
             ssh = self.ssh_client
             logging.info('Web Connecting to {}:{}'.format(*dst_addr))
             try:
@@ -476,6 +496,7 @@ class IndexHandler(MixinHandler, tornado.web.RequestHandler):
                 chan.send('su\n')
                 sleep(1)
                 chan.send(globals.vdi_root_pwd + '\n')
+
         worker = Worker(self.loop, ssh, chan, dst_addr)
         worker.encoding = options.encoding if options.encoding else \
             self.get_default_encoding(ssh)
