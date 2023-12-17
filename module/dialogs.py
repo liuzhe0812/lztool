@@ -394,9 +394,9 @@ class file_check_dlg(wx.Dialog):
 class file_chmod(wx.Dialog):
     def __init__(self, filename, mod):
         wx.Dialog.__init__(self, None, -1, title="修改权限")
+        self.SetBackgroundColour('white')
         sizer_main = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer_main)
-
         self.mod = mod
 
         txt = wx.StaticText(self, label=filename)
@@ -1460,7 +1460,7 @@ class file_choice(wx.Dialog):
         self.bt_ok = wx.Button(self, id=wx.ID_OK, size=(40, -1), label="确定")
         self.bt_cancel = wx.Button(self, id=wx.ID_CANCEL, size=(40, -1), label="取消")
 
-        linebt.Add((-1,-1),1)
+        linebt.Add((-1, -1), 1)
         linebt.Add(self.cb_rootlimit, 0, wx.ALIGN_CENTER)
         linebt.Add(self.cb_multi, 0, wx.ALIGN_CENTER)
         linebt.Add(self.bt_ok, 0, wx.RIGHT, 5)
@@ -1561,3 +1561,441 @@ class config_dlg(wx.adv.PropertySheetDialog):
 
         panel.SetSizer(topSizer)
         return panel
+
+
+class system_moniter(wx.Frame):
+    def __init__(self, parent, title, conn):
+        wx.Frame.__init__(self, parent=parent, title=title,
+                          style=wx.DEFAULT_FRAME_STYLE & ~(wx.MINIMIZE_BOX | wx.MAXIMIZE_BOX))
+        self.conn = conn
+        self.MONITER_STAT = True
+        self.time_cost = 0  # 单位：秒
+        self.old_time = 0
+        self.st_width = 70
+        self.SetBackgroundColour('white')
+        self.SetIcon(wx.Icon('bitmaps/bt_moniter.png'))
+
+        self.init_panel()
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+        self.int_choice.Bind(wx.EVT_CHOICE, self.on_choice_change)
+
+    # 监控窗口
+    def init_panel(self):
+        try:
+            stat = self.get_stat()
+            res = self.conn.recv("lsblk | sed 's/├─//g' |sed 's/└─//g' |sed '1d' | awk '{print $1,$7}';"
+                                 "echo '-separate-';"
+                                 "uname -r;"
+                                 "echo '-separate-';"
+                                 "lscpu | grep -E 'Model name|Socket\(s\)|Core\(s\)|Thread\(s\)';"
+                                 "echo '-separate-';"
+                                 "lspci | grep -i Ethernet;"
+                                 "echo '-separate-';"
+                                 "lsscsi")
+            self.basic_info = res.split('-separate-')
+            if self.basic_info[3].strip() == '':
+                res = self.conn.server_recv('lspci | grep -i Ethernet')
+                int_str = ''
+                for int_info in res.split('lspci | grep -i Ethernet')[1].strip().split('\n')[:-1]:
+                    int_info = int_info.split(': ')[1].strip() + '\n'
+                    int_info = re.sub(r'\x1b[@-_][0-?]*[^@-_]*\[K', '', int_info)
+                    int_str += int_info
+                self.basic_info[3] = int_str[:-1]
+        except Exception as e:
+            self.Destroy()
+            mMessageBox(str(e))
+            raise
+
+        self.init_pwin_system()
+        self.init_pwin_net()
+        self.init_pwin_disk()
+
+        sizer1 = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(sizer1)
+        s1l0 = wx.BoxSizer(wx.HORIZONTAL)
+        s1l1 = wx.BoxSizer(wx.HORIZONTAL)
+
+        titel_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        title_system = mPlateButton(self, None, '系统', (-1, 20), platebtn.PB_STYLE_DROPARROW)
+        title_system.Bind(platebtn.EVT_PLATEBTN_DROPARROW_PRESSED, self.on_system)
+        title_system.SetFont(wx.Font(10, 70, 90, 92, False, '微软雅黑'))
+        titel_sizer.Add(title_system)
+        titel_sizer.Add((-1, -1), 1, wx.EXPAND)
+        titel_sizer.Add(wx.StaticText(self, label='刷新频率'), 0, wx.ALIGN_CENTER | wx.RIGHT, 5)
+        self.freq_ctrl = wx.SpinCtrl(self, -1, "2", size=(-1, 20))
+        titel_sizer.Add(self.freq_ctrl, 0, wx.EXPAND | wx.RIGHT, 20)
+
+        title_disk = mPlateButton(self, None, '磁盘', (-1, 20), platebtn.PB_STYLE_DROPARROW)
+        title_disk.Bind(platebtn.EVT_PLATEBTN_DROPARROW_PRESSED, self.on_disk)
+        title_disk.SetFont(wx.Font(10, 70, 90, 92, False, '微软雅黑'))
+        title_net = mPlateButton(self, None, '网络', (-1, 20), platebtn.PB_STYLE_DROPARROW)
+        title_net.Bind(platebtn.EVT_PLATEBTN_DROPARROW_PRESSED, self.on_net)
+        title_net.SetFont(wx.Font(10, 70, 90, 92, False, '微软雅黑'))
+
+        sizer1.Add(titel_sizer, 0, wx.EXPAND | wx.TOP | wx.LEFT, 10)
+        sizer1.Add(s1l0, 0, wx.EXPAND)
+        sizer1.Add(s1l1, 0, wx.EXPAND)
+
+        self.gauge_cpu = mGauge(self)
+        self.gauge_mem = mGauge(self)
+        self.gauge_swap = mGauge(self)
+        st_cpu = wx.StaticText(self, label='CPU', size=(self.st_width, -1), style=wx.ALIGN_RIGHT)
+        st_mem = wx.StaticText(self, label='内存', style=wx.ALIGN_RIGHT)
+        st_swap = wx.StaticText(self, label='交换', style=wx.ALIGN_RIGHT)
+
+        st_1 = wx.StaticText(self, label='运行', size=(self.st_width, -1), style=wx.ALIGN_RIGHT)
+        st_2 = wx.StaticText(self, label='负载', size=(self.st_width, -1), style=wx.ALIGN_RIGHT)
+        self.runtime = wx.StaticText(self, label='')
+        self.load = wx.StaticText(self, label='')
+
+        s1l0.Add(st_1, 0, wx.TOP | wx.LEFT, 5)
+        s1l0.Add(self.runtime, 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        s1l0.Add(st_2, 0, wx.TOP | wx.LEFT, 5)
+        s1l0.Add(self.load, 0, wx.TOP | wx.LEFT, 5)
+
+        s1l1.Add(st_cpu, 0, wx.TOP | wx.LEFT, 5)
+        s1l1.Add(self.gauge_cpu, 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        s1l1.Add(st_mem, 0, wx.TOP | wx.LEFT, 5)
+        s1l1.Add(self.gauge_mem, 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        s1l1.Add(st_swap, 0, wx.TOP | wx.LEFT, 5)
+        s1l1.Add(self.gauge_swap, 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
+
+        # time
+        self.old_time = int(stat['time'])
+
+        # cpu
+        self.use_tmp = int(stat['system']['cpu_use'])
+        self.idle_tmp = int(stat['system']['cpu_idle'])
+
+        # net
+        self.int_list = {}
+        for int_info in stat['net']:
+            int_info = int_info.split(' ')
+            if int_info[0] == 'lo:':
+                continue
+            int_name = int_info[0][:-1]
+            self.int_list[int_name] = {
+                'upload': int_info[1],
+                'download': int_info[2],
+            }
+
+        sizer_net = wx.BoxSizer(wx.HORIZONTAL)
+
+        self.int_choice = wx.Choice(self, choices=list(self.int_list.keys()), style=wx.NO_BORDER, size=(118, 20))
+        self.int_choice.SetSelection(0)
+
+        sizer_net.Add(wx.StaticText(self, label='网卡', size=(self.st_width, -1),
+                                    style=wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL), 0,
+                      wx.TOP | wx.LEFT | wx.ALIGN_CENTER, 5)
+        sizer_net.Add(self.int_choice, 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
+
+        sizer_net.Add(wx.StaticBitmap(self, wx.ID_ANY, wx.Bitmap('bitmaps/upload.png', wx.BITMAP_TYPE_PNG)), 0,
+                      wx.TOP | wx.LEFT | wx.RIGHT | wx.ALIGN_CENTER, 5)
+        self.st_upload = wx.StaticText(self, label='/', size=(50, -1))
+        sizer_net.Add(self.st_upload, 0, wx.TOP | wx.ALIGN_CENTER, 5)
+
+        sizer_net.Add(wx.StaticBitmap(self, wx.ID_ANY, wx.Bitmap('bitmaps/download.png', wx.BITMAP_TYPE_PNG)), 0,
+                      wx.TOP | wx.LEFT | wx.RIGHT | wx.ALIGN_CENTER, 5)
+
+        self.st_download = wx.StaticText(self, label='/', size=(50, -1))
+        sizer_net.Add(self.st_download, 0, wx.TOP | wx.ALIGN_CENTER, 5)
+
+        sizer_net.Add(wx.StaticText(self, label='速率：'), 0, wx.TOP | wx.LEFT | wx.ALIGN_CENTER, 5)
+        self.st_int_speed = wx.StaticText(self, label='/', size=(70, -1))
+        sizer_net.Add(self.st_int_speed, 0, wx.TOP | wx.RIGHT | wx.ALIGN_CENTER, 5)
+
+        sizer_net.Add(wx.StaticText(self, label='接口：'), 0, wx.TOP | wx.LEFT | wx.ALIGN_CENTER, 5)
+        self.st_int_port = wx.StaticText(self, label='/', size=(40, -1))
+        sizer_net.Add(self.st_int_port, 0, wx.TOP | wx.RIGHT | wx.ALIGN_CENTER, 5)
+
+        sizer_net.Add(wx.StaticText(self, label='连接状态：'), 0, wx.TOP | wx.LEFT | wx.ALIGN_CENTER, 5)
+        self.st_int_detected = wx.StaticText(self, label='/', size=(20, -1))
+        sizer_net.Add(self.st_int_detected, 0, wx.TOP | wx.RIGHT | wx.ALIGN_CENTER, 5)
+
+        sizer1.Add(title_net, 0, wx.TOP | wx.LEFT, 10)
+        sizer1.Add(sizer_net, 0, wx.EXPAND)
+
+        self.on_choice_change(None)
+
+        # disk
+        blk_info = self.basic_info[0].split('\n')
+        mount_point = {}
+        for disk in blk_info:
+            if not disk:
+                continue
+            disk_info = disk.split(' ')
+            mount_point[disk_info[0]] = disk_info[1]
+
+        sizer1.Add(title_disk, 0, wx.TOP | wx.LEFT, 10)
+        self.disks = {}
+        disk_info = stat['disk']
+        for disk in disk_info:
+            disk = disk.split(' ')
+            if disk[0].startswith('loop') or disk[0].startswith('sr'):
+                continue
+            gauge = mGauge(self)
+            st_read = wx.StaticText(self, label='/', size=(50, -1))
+            st_write = wx.StaticText(self, label='/', size=(50, -1))
+            st_iops = wx.StaticText(self, label='/', size=(50, -1))
+
+            sizer = wx.BoxSizer(wx.HORIZONTAL)
+            sizer.Add(wx.StaticText(self, label=disk[0], size=(self.st_width, -1), style=wx.ALIGN_RIGHT), 0,
+                      wx.TOP | wx.LEFT, 5)
+            sizer.Add(gauge, 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
+            sizer.Add(wx.StaticText(self, label='读：'), 0, wx.TOP | wx.LEFT, 5)
+            sizer.Add(st_read, 0, wx.TOP | wx.LEFT, 5)
+            sizer.Add(wx.StaticText(self, label='写：'), 0, wx.TOP | wx.LEFT, 5)
+            sizer.Add(st_write, 0, wx.TOP | wx.LEFT, 5)
+            sizer.Add(wx.StaticText(self, label='iops：'), 0, wx.TOP | wx.LEFT, 5)
+            sizer.Add(st_iops, 0, wx.TOP | wx.LEFT, 5)
+            sizer.Add(
+                wx.StaticText(self, label='挂载点：%s' % mount_point[disk[0]] if disk[0] in mount_point else '挂载点：'),
+                0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
+
+            self.disks[disk[0]] = {
+                'read_io': int(disk[1]),
+                'write_io': int(disk[2]),
+                'read_sectors': int(disk[3]),
+                'write_sectors': int(disk[4]),
+                'io_time': int(disk[5]),
+                'gauge': gauge,
+                'st_read': st_read,
+                'st_write': st_write,
+                'st_iops': st_iops,
+            }
+            sizer1.Add(sizer, 0, wx.EXPAND)
+
+        self.Layout()
+        self.SetSize(self.GetBestSize() + (20, 20))
+        self.Centre()
+
+        start_new_thread(self.momniter, ())
+
+    def get_stat(self):
+        cmd = "cat /proc/net/dev | awk '{print $1,$2,$10}';" \
+              "echo '-separate-';" \
+              "cat /proc/diskstats | awk '{print $3,$4,$8,$6,$10,$13}';" \
+              "echo '-separate-';" \
+              "cat /proc/stat | head -n 1 | awk '{sum = $2 + $3 + $4; print sum,$5}';" \
+              "free | tail -n +2 | awk '{print $2,$3,$7}';" \
+              "uptime;" \
+              "echo '-separate-';" \
+              "echo $[10#$(date +%d%M%S%N)/1000000]"
+        re = self.conn.recv(cmd)
+        re = re.strip().split('-separate-')
+
+        sys_info = re[2].strip().split('\n')
+        sys_stat = {
+            'cpu_use': sys_info[0].split(' ')[0],
+            'cpu_idle': sys_info[0].split(' ')[1],
+            'mem': sys_info[1].split(' '),
+            'swap': sys_info[2].split(' '),
+            'uptime': sys_info[3].split(',')
+        }
+
+        status = {
+            "net": re[0].strip().split('\n')[2:],
+            'disk': re[1].strip().split('\n'),
+            'system': sys_stat,
+            'time': re[3]
+        }
+        return status
+
+    def momniter(self):
+        while self.MONITER_STAT:
+            try:
+                stat = self.get_stat()
+                time_now = int(stat['time'])
+                self.time_cost = (time_now - self.old_time) / 1000
+                self.old_time = time_now
+                self.set_system_stat(stat['system'])
+                self.set_disk_stat(stat['disk'])
+                self.set_net_stat(stat['net'])
+            except Exception as e:
+                logging.error(e)
+                raise
+            time.sleep(self.freq_ctrl.GetValue())
+
+    def init_pwin_system(self):
+        self.pwin_system = mPopupWindow(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        self.pwin_system.SetSizer(sizer)
+
+        kernal = self.basic_info[1].strip()
+
+        # cpu_info格式化
+        cpu_info = self.basic_info[2].strip().split('\n')
+        cpu_model = cpu_info[3].split(':')[1].strip()
+        cpu_count = int(cpu_info[2].split(':')[1].strip())
+        core_per_cpu = int(cpu_info[1].split(':')[1].strip())
+        thread_per_core = int(cpu_info[0].split(':')[1].strip())
+
+        s1 = wx.BoxSizer(wx.HORIZONTAL)
+        s1str = wx.StaticText(self.pwin_system, label='内核: ', size=(60, -1), style=wx.ALIGN_RIGHT)
+        s1str.SetFont(wx.Font(9, 70, 90, 92, False, '微软雅黑'))
+        s1.Add(s1str, 0)
+        s1.Add(wx.StaticText(self.pwin_system, label=kernal), 1)
+        sizer.Add(s1, 0, wx.LEFT | wx.RIGHT | wx.TOP,10)
+
+        s2 = wx.BoxSizer(wx.HORIZONTAL)
+        s2str = wx.StaticText(self.pwin_system, label='CPU型号: ', size=(60, -1), style=wx.ALIGN_RIGHT)
+        s2str.SetFont(wx.Font(9, 70, 90, 92, False, '微软雅黑'))
+        s2.Add(s2str, 0)
+        s2.Add(wx.StaticText(self.pwin_system, label=cpu_model), 1)
+        sizer.Add(s2, 0, wx.LEFT | wx.RIGHT, 10)
+
+        s3 = wx.BoxSizer(wx.HORIZONTAL)
+        s3str = wx.StaticText(self.pwin_system, label='CPU参数: ', size=(60, -1), style=wx.ALIGN_RIGHT)
+        s3str.SetFont(wx.Font(9, 70, 90, 92, False, '微软雅黑'))
+        s3.Add(s3str, 0)
+        s3.Add(wx.StaticText(self.pwin_system,
+                             label=f'{cpu_count}路/{core_per_cpu * cpu_count}核/{cpu_count * core_per_cpu * thread_per_core}线程'),
+               1)
+        sizer.Add(s3, 0, wx.LEFT | wx.RIGHT |wx.BOTTOM, 10)
+
+        self.pwin_system.SetSize(self.pwin_system.GetBestSize())
+        self.pwin_system.Layout()
+
+    def init_pwin_net(self):
+        self.pwin_net = mPopupWindow(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        self.pwin_net.SetSizer(sizer)
+
+        sizer.Add(wx.StaticText(self.pwin_net, label=self.basic_info[3].strip()), 1, wx.ALL, 10)
+
+        self.pwin_net.SetSize(self.pwin_net.GetBestSize())
+        self.pwin_net.Layout()
+
+    def init_pwin_disk(self):
+        self.pwin_disk = mPopupWindow(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        self.pwin_disk.SetSizer(sizer)
+        sizer.Add(wx.StaticText(self.pwin_disk, label=self.basic_info[4].strip()), 1, wx.ALL, 10)
+
+        self.pwin_disk.SetSize(self.pwin_disk.GetBestSize())
+        self.pwin_disk.Layout()
+
+    def on_system(self, evt):
+        bt = evt.GetEventObject()
+        pos = bt.ClientToScreen((0, 0))
+        self.pwin_system.Position(pos, (30, 30))
+        wx.CallAfter(self.pwin_system.Show, True)
+
+    def on_net(self, evt):
+        bt = evt.GetEventObject()
+        pos = bt.ClientToScreen((0, 0))
+        self.pwin_net.Position(pos, (30, 30))
+        wx.CallAfter(self.pwin_net.Show, True)
+
+    def on_disk(self, evt):
+        bt = evt.GetEventObject()
+        pos = bt.ClientToScreen((0, 0))
+        self.pwin_disk.Position(pos, (30, 30))
+        wx.CallAfter(self.pwin_disk.Show, True)
+
+    def set_system_stat(self, stat):
+        use = self.use_tmp
+        idle = self.idle_tmp
+        self.use_tmp = int(stat['cpu_use'])
+        self.idle_tmp = int(stat['cpu_idle'])
+
+        cpu_use = 100 * (self.use_tmp - use) / (self.use_tmp - use + self.idle_tmp - idle)
+        self.gauge_cpu.SetValue(int(cpu_use), f'{cpu_use:.1f}%')
+
+        mem = stat['mem']
+        mem_use = int(mem[0]) - int(mem[2])
+        mem_tot = int(mem[0])
+        mem_use_per = 100 * mem_use / mem_tot
+        mem_use_fit = methods.bytes2human(mem_use, start='K')
+        mem_tot_fit = methods.bytes2human(mem_tot, start='K')
+        self.gauge_mem.SetValue(int(mem_use_per), f'{mem_use_per:.1f}%')
+        self.gauge_mem.SetToolTip(f'{mem_use_fit}/{mem_tot_fit}')
+
+        swap = stat['swap']
+        swap_use = int(swap[1])
+        swap_tot = int(swap[0])
+        if not swap_tot:
+            self.gauge_swap.SetValue(0, 'no swap', '')
+        else:
+            swap_use_per = int(100 * swap_use / swap_tot)
+            swap_use_fit = methods.bytes2human(swap_use, start='K')
+            swap_tot_fit = methods.bytes2human(swap_tot, start='K')
+            self.gauge_swap.SetValue(swap_use_per, '%s%%' % swap_use_per)
+            self.gauge_swap.SetToolTip(f'{swap_use_fit}/{swap_tot_fit}')
+
+        uptime = stat['uptime']
+        self.runtime.SetLabel(uptime[0].split('up')[1])
+        self.load.SetLabel(uptime[-3].split(':')[1] + uptime[-2] + uptime[-1])
+
+    def set_disk_stat(self, disk_info):
+        for disk in disk_info:
+            disk = disk.split(' ')
+            if disk[0].startswith('loop') or disk[0].startswith('sr'):
+                continue
+            r_io_old = self.disks[disk[0]]['read_io']
+            w_io_old = self.disks[disk[0]]['write_io']
+            r_sec_old = self.disks[disk[0]]['read_sectors']
+            w_sec_old = self.disks[disk[0]]['write_sectors']
+            io_time_old = self.disks[disk[0]]['io_time']
+            self.disks[disk[0]]['read_io'] = int(disk[1])
+            self.disks[disk[0]]['write_io'] = int(disk[2])
+            self.disks[disk[0]]['read_sectors'] = int(disk[3])
+            self.disks[disk[0]]['write_sectors'] = int(disk[4])
+            self.disks[disk[0]]['io_time'] = int(disk[5])
+
+            read_speed = (int(disk[3]) - r_sec_old) / self.time_cost / 2
+            read_speed_format = methods.bytes2human(int(read_speed), 'K')
+            write_speed = (int(disk[4]) - w_sec_old) / self.time_cost / 2
+            write_speed_format = methods.bytes2human(int(write_speed), 'K')
+            iops = (int(disk[1]) - r_io_old + int(disk[2]) - w_io_old) / self.time_cost
+            busy = (int(disk[5]) - io_time_old) * 100 / (self.time_cost * 1000)  # 时间换算成毫秒
+            self.disks[disk[0]]['gauge'].SetValue(int(busy), left_str=f'{busy:.1f}%')
+            self.disks[disk[0]]['st_read'].SetLabel(f'{read_speed_format}/s')
+            self.disks[disk[0]]['st_write'].SetLabel(f'{write_speed_format}/s')
+            self.disks[disk[0]]['st_iops'].SetLabel(f'{iops:.0f}')
+
+    def set_net_stat(self, net_info):
+        int_name = self.int_choice.GetStringSelection()
+        if not int_name:
+            return
+        for int_info in net_info:
+            int_info = int_info.split(' ')
+            if int_info[0][:-1] == int_name:
+                up_last = int(self.int_list[int_name]['upload'])
+                down_last = int(self.int_list[int_name]['download'])
+                up_new = int(int_info[1])
+                down_new = int(int_info[2])
+                self.int_list[int_name]['upload'] = int_info[1]
+                self.int_list[int_name]['download'] = int_info[2]
+                up_speed = (up_new - up_last) / 1024 / self.time_cost
+                down_speed = (down_new - down_last) / 1024 / self.time_cost
+                up_speed_format = methods.bytes2human(int(up_speed), 'K')
+                down_speed_format = methods.bytes2human(int(down_speed), 'K')
+                self.st_upload.SetLabel(f'{up_speed_format}/s')
+                self.st_download.SetLabel(f'{down_speed_format}/s')
+
+    def on_choice_change(self, evt):
+        int_name = self.int_choice.GetStringSelection()
+        start_new_thread(self.set_int_info, (int_name,))
+
+    def set_int_info(self, int_name):
+        if self.conn.username == globals.vdi_user:
+            res = self.conn.server_recv("ethtool %s | grep -E 'Speed|Port|Link detected'" % int_name)
+            res = res.split('\n')[-4:-1]
+        else:
+            res = self.conn.recv("ethtool %s | grep -E 'Speed|Port|Link detected'" % int_name)
+            res = res.split('\n')
+        self.st_int_speed.SetLabel(res[0].split(': ')[1])
+        port_type = res[1].split(': ')[1].strip()
+        if port_type == 'FIBRE':
+            port_type = '光'
+        elif port_type == 'Twisted Pair':
+            port_type = '电'
+        else:
+            port_type = 'other'
+        self.st_int_port.SetLabel(port_type)
+        self.st_int_detected.SetLabel(res[2].split(': ')[1])
+
+    def on_close(self, evt):
+        self.MONITER_STAT = False
+        self.Destroy()

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-import logging, shutil, threadpool, wx.grid, wx.aui, pyperclip, base64, stat, configparser, os, re,time
+import logging, shutil, threadpool, wx.grid, wx.aui, pyperclip, base64, stat, configparser, os, re, time
 from _thread import start_new_thread
 from .myui import *
 from functools import reduce
 from module import methods, dialogs, globals, ssh
 from module.widgets import platebtn
 from wx.html2 import WebView
-from module.dialogs import add_cmd_dlg, file_chmod, file_edit, file_choice, sshclient_list
+from module.dialogs import add_cmd_dlg, file_chmod, file_edit, file_choice, sshclient_list,system_moniter
 from module.methods import getLabelFromEVT, bytes2human
 from module.widgets import auiNotebook as ANB
 import module.widgets.aui as aui
@@ -192,14 +192,14 @@ class ssh_panel(wx.Panel):
             self.link_ok = i
             wx.CallAfter(self.st_session_count.SetLabel, str(i))
 
-    def ShowSSHMenu(self,evt=None):
+    def ShowSSHMenu(self, evt=None):
         rect = self.TopLevelParent.menubarPnl.bt_transfer_menu.GetRect()
         pos = self.TopLevelParent.menubarPnl.bt_transfer_menu.ClientToScreen((rect.width, 0))
         wid = self.ssh_menu.GetSize()[0]
         self.ssh_menu.Position(pos, (-5 - wid, 30))
         self.ssh_menu.Show(True)
 
-    def on_bt_split(self,evt):
+    def on_bt_split(self, evt):
 
         if self.TopLevelParent.mainPnl._sel != 0:
             return
@@ -211,22 +211,24 @@ class ssh_panel(wx.Panel):
                     if i == 0:
                         continue
                     if i == 1:
-                        self.nb_console.Split(i,wx.RIGHT)
-                    if i >1:
-                        self.nb_console.Split(i,wx.DOWN)
+                        self.nb_console.Split(i, wx.RIGHT)
+                    if i > 1:
+                        self.nb_console.Split(i, wx.DOWN)
             else:
-                self.nb_console.Split(n-3, wx.RIGHT)
-                self.nb_console.Split(n-2, wx.DOWN)
-                self.nb_console.Split(n-1, wx.DOWN)
+                self.nb_console.Split(n - 3, wx.RIGHT)
+                self.nb_console.Split(n - 2, wx.DOWN)
+                self.nb_console.Split(n - 1, wx.DOWN)
             self.nb_console.Thaw()
             self.is_split = True
         else:
             self.nb_console.UnSplit()
             self.is_split = False
 
-    def on_bt_moniter(self,evt):
+    def on_bt_moniter(self, evt):
         conn = self.get_cur_page().conn
-        frm = system_moniter(self,conn.host,conn)
+        if not conn:
+            return
+        frm = system_moniter(self, conn.host, conn)
         frm.Show()
 
     def onOpenDownloadDir(self, evt):
@@ -289,7 +291,7 @@ class ssh_panel(wx.Panel):
         if cur_page.conn and self.panel_scp.conn != cur_page.conn:
             self.set_cur_conn(cur_page.conn)
             self.panel_scp.conn = cur_page.conn
-            start_new_thread(self.panel_scp.refresh_dir,())
+            start_new_thread(self.panel_scp.refresh_dir, ())
 
     def onNotebookPageClose(self, evt):
         '点x时触发，事件完成后才调用DeletePage()，除此之外其他情况不添加default page'
@@ -447,7 +449,7 @@ class ssh_panel(wx.Panel):
         self.port.SetValue(info[2])
         self.username.SetValue(info[3])
         self.password.SetValue(info[4])
-        self.DeleteAllPages(False)
+        # self.DeleteAllPages(False)
         self.start_connect(info)
         if self.CB_save.GetValue():
             self.save_config_file(info)
@@ -514,10 +516,12 @@ class ssh_panel(wx.Panel):
             self.done = 0
             self.total = 0
             if self.link_ok > 0:
+                if not self.shellpage_dic:
+                    self.DeleteAllPages(False)
                 wx.CallAfter(self.add_shell_page, (globals.cur_conn))
                 self.Layout()
             else:
-                wx.CallAfter(self.close_all_ssh,None)
+                wx.CallAfter(self.close_all_ssh, None)
 
     def create_session(self, conn):
         self.num.SetValue('1')
@@ -544,7 +548,6 @@ class ssh_panel(wx.Panel):
         return conn
 
     def on_linklist_act(self, evt):
-        parent = evt.GetEventObject().Parent
         sshclient = evt.GetText()
         info = self.read_ssh_config(sshclient)
         self.num.SetValue(info[0])
@@ -552,8 +555,8 @@ class ssh_panel(wx.Panel):
         self.port.SetValue(info[2])
         self.username.SetValue(info[3])
         self.password.SetValue(info[4])
+        self.nb_console.DeletePage(self.nb_console.GetPageIndex(self.nb_console.GetCurrentPage()))
         self.start_connect(info)
-        self.nb_console.DeletePage(self.nb_console.GetPageIndex(parent))
 
     def change_online_count(self, n):
         if n == None:
@@ -636,7 +639,7 @@ class ssh_panel(wx.Panel):
                     self.delete_console_page(ip)
                 globals.multi_ssh_conn.pop(ip)
 
-    def delete_console_page(self,ip):
+    def delete_console_page(self, ip):
         self.nb_console.DeletePage(self.nb_console.GetPageIndex(self.shellpage_dic[ip]))
         self.shellpage_dic.pop(ip)
         globals.multi_ssh_conn[ip].console = False
@@ -824,222 +827,6 @@ class CopyPage(wx.Panel):
         self.browser.LoadURL(url)
 
 
-class system_moniter(wx.Frame):
-    def __init__(self, parent, title,conn):
-        wx.Frame.__init__(self, parent=parent,title=title,
-                          style=wx.DEFAULT_FRAME_STYLE & ~(wx.MINIMIZE_BOX | wx.MAXIMIZE_BOX))
-        self.conn = conn
-        self.MONITER_STAT = True
-        self.time_cost = 0
-        self.old_time = 0
-        self.SetBackgroundColour('white')
-        self.SetIcon(wx.Icon('bitmaps/bt_moniter.png'))
-
-        self.init_panel()
-        self.Bind(wx.EVT_CLOSE,self.on_close)
-
-    # 监控窗口
-    def init_panel(self):
-        st_width = 80
-
-        sizer1 = wx.BoxSizer(wx.VERTICAL)
-        self.SetSizer(sizer1)
-        s1l0 = wx.BoxSizer(wx.HORIZONTAL)
-        s1l1 = wx.BoxSizer(wx.HORIZONTAL)
-        s1l2 = wx.BoxSizer(wx.HORIZONTAL)
-        s1l3 = wx.BoxSizer(wx.HORIZONTAL)
-        s1l4 = wx.BoxSizer(wx.HORIZONTAL)
-        sizer1.Add(s1l0, 0, wx.EXPAND)
-        sizer1.Add(s1l1, 0, wx.EXPAND)
-        sizer1.Add(s1l2, 0, wx.EXPAND)
-        sizer1.Add(s1l3, 0, wx.EXPAND)
-        sizer1.Add(s1l4, 0, wx.EXPAND)
-
-        self.gauge_cpu = mGauge(self)
-        self.gauge_mem = mGauge(self)
-        self.gauge_swap = mGauge(self)
-        st_cpu = wx.StaticText(self, label='CPU',size=(st_width,-1),style=wx.ALIGN_RIGHT)
-        st_mem = wx.StaticText(self, label='内存',size=(st_width,-1),style=wx.ALIGN_RIGHT)
-        st_swap = wx.StaticText(self, label='交换',size=(st_width,-1),style=wx.ALIGN_RIGHT)
-
-        st_1 = wx.StaticText(self, label='运行',size=(st_width,-1),style=wx.ALIGN_RIGHT)
-        st_2 = wx.StaticText(self, label='负载',size=(st_width,-1),style=wx.ALIGN_RIGHT)
-        self.runtime = wx.StaticText(self, label='')
-        self.load = wx.StaticText(self, label='')
-
-        s1l0.Add(st_1, 0, wx.TOP | wx.LEFT, 5)
-        s1l0.Add(self.runtime, 1, wx.TOP | wx.LEFT, 5)
-        s1l1.Add(st_2, 0, wx.TOP | wx.LEFT, 5)
-        s1l1.Add(self.load, 1, wx.TOP | wx.LEFT, 5)
-
-        s1l2.Add(st_cpu, 0, wx.TOP | wx.LEFT, 5)
-        s1l2.Add(self.gauge_cpu, 0, wx.TOP | wx.LEFT|wx.RIGHT, 5)
-        s1l3.Add(st_mem, 0, wx.TOP | wx.LEFT, 5)
-        s1l3.Add(self.gauge_mem, 0, wx.TOP | wx.LEFT|wx.RIGHT, 5)
-        s1l4.Add(st_swap, 0, wx.TOP | wx.LEFT, 5)
-        s1l4.Add(self.gauge_swap, 0, wx.TOP | wx.LEFT|wx.RIGHT, 5)
-
-        stat = self.get_stat()
-
-        #time
-        self.old_time = int(stat['time'])
-
-        # cpu
-        self.use_tmp = int(stat['system']['cpu_use'])
-        self.idle_tmp = int(stat['system']['cpu_idle'])
-
-        # disk
-        self.disks = {}
-        disk_info = stat['disk']
-        for disk in disk_info:
-            disk = disk.split(' ')
-            if disk[0].startswith('loop') or disk[0].startswith('sr'):
-                continue
-            gauge = mGauge(self)
-            st_read = wx.StaticText(self,label='/',size=(50,-1))
-            st_write = wx.StaticText(self,label='/',size=(50,-1))
-            st_iops = wx.StaticText(self,label='/',size=(50,-1))
-
-            sizer = wx.BoxSizer(wx.HORIZONTAL)
-            sizer.Add(wx.StaticText(self, label=disk[0],size=(st_width,-1),style=wx.ALIGN_RIGHT),0,wx.TOP | wx.LEFT, 5)
-            sizer.Add(gauge, 0, wx.TOP | wx.LEFT|wx.RIGHT, 5)
-            # sizer.Add(wx.StaticBitmap(self,wx.ID_ANY,wx.Bitmap('bitmaps/upload.png',wx.BITMAP_TYPE_PNG)), 0, wx.TOP | wx.LEFT|wx.RIGHT, 5)
-            sizer.Add(wx.StaticText(self, label='read：'), 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
-            sizer.Add(st_read, 0, wx.TOP | wx.LEFT|wx.RIGHT, 5)
-            sizer.Add(wx.StaticText(self, label='write：'), 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
-            sizer.Add(st_write, 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
-            sizer.Add(wx.StaticText(self, label='iops：'), 0,wx.TOP | wx.LEFT | wx.RIGHT, 5)
-            sizer.Add(st_iops, 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
-
-
-            self.disks[disk[0]] = {
-                'read_io': int(disk[1]),
-                'write_io': int(disk[2]),
-                'read_sectors': int(disk[3]),
-                'write_sectors': int(disk[4]),
-                'io_time': int(disk[5]),
-                'gauge':gauge,
-                'st_read':st_read,
-                'st_write':st_write,
-                'st_iops':st_iops,
-            }
-            sizer1.Add(sizer, 0, wx.EXPAND)
-
-
-        self.Layout()
-        self.SetSize(self.GetBestSize()+(20,20))
-        self.Centre()
-
-        start_new_thread(self.momniter, ())
-
-    def get_stat(self):
-        cmd = "cat /proc/net/dev | awk '{print $1,$2,$10}';" \
-              "echo '-separate-';" \
-              "cat /proc/diskstats | awk '{print $3,$4,$8,$6,$10,$13}';" \
-              "echo '-separate-';" \
-              "cat /proc/stat | head -n 1 | awk '{sum = $2 + $3 + $4; print sum,$5}';" \
-              "free | tail -n +2 | awk '{print $2,$3,$7}';" \
-              "uptime;" \
-              "echo '-separate-';" \
-              "echo $[10#$(date +%d%M%S%N)/1000000]"
-        re = self.conn.recv(cmd)
-        re = re.strip().split('-separate-')
-
-        sys_info = re[2].strip().split('\n')
-        sys_stat = {
-            'cpu_use':sys_info[0].split(' ')[0],
-            'cpu_idle':sys_info[0].split(' ')[1],
-            'mem':sys_info[1].split(' '),
-            'swap':sys_info[2].split(' '),
-            'uptime':sys_info[3].split(',')
-        }
-
-        status = {
-            "net":re[0],
-            'disk':re[1].strip().split('\n'),
-            'system':sys_stat,
-            'time':re[3]
-        }
-        return status
-
-    def momniter(self,sec=2):
-        while self.MONITER_STAT:
-            try:
-                stat = self.get_stat()
-                time_now = int(stat['time'])
-                self.time_cost = time_now - self.old_time
-                self.old_time = time_now
-                self.set_system_stat(stat['system'])
-                self.set_disk_stat(stat['disk'])
-            except Exception as e:
-                logging.error(e)
-                raise
-            time.sleep(sec)
-
-    def set_system_stat(self,stat):
-        use = self.use_tmp
-        idle = self.idle_tmp
-        self.use_tmp = int(stat['cpu_use'])
-        self.idle_tmp = int(stat['cpu_idle'])
-
-        cpu_use = int(100 * (self.use_tmp - use) / (self.use_tmp - use + self.idle_tmp - idle))
-        self.gauge_cpu.SetValue(cpu_use, '%s%%' % cpu_use)
-
-        mem = stat['mem']
-        mem_use = int(mem[0]) - int(mem[2])
-        mem_tot = int(mem[0])
-        mem_use_per = int(100 * mem_use / mem_tot)
-        mem_use_fit = bytes2human(mem_use, start='K')
-        mem_tot_fit = bytes2human(mem_tot, start='K')
-        self.gauge_mem.SetValue(mem_use_per, '%s%%' % mem_use_per, '%s/%s' % (mem_use_fit, mem_tot_fit))
-
-        swap = stat['swap']
-        swap_use = int(swap[1])
-        swap_tot = int(swap[0])
-        if not swap_tot:
-            self.gauge_swap.SetValue(0, 'no swap', '')
-        else:
-            swap_use_per = int(100 * swap_use / swap_tot)
-            swap_use_fit = bytes2human(swap_use, start='K')
-            swap_tot_fit = bytes2human(swap_tot, start='K')
-            self.gauge_swap.SetValue(swap_use_per, '%s%%' % swap_use_per,
-                                     '%s/%s' % (swap_use_fit, swap_tot_fit))
-
-        uptime = stat['uptime']
-        self.runtime.SetLabel(uptime[0].split('up')[1])
-        self.load.SetLabel(uptime[-3].split(':')[1] + uptime[-2] + uptime[-1])
-
-    def set_disk_stat(self,disk_info):
-        for disk in disk_info:
-            disk = disk.split(' ')
-            if disk[0].startswith('loop') or disk[0].startswith('sr'):
-                continue
-            r_io_old = self.disks[disk[0]]['read_io']
-            w_io_old = self.disks[disk[0]]['write_io']
-            r_sec_old = self.disks[disk[0]]['read_sectors']
-            w_sec_old = self.disks[disk[0]]['write_sectors']
-            io_time_old = self.disks[disk[0]]['io_time']
-            self.disks[disk[0]]['read_io'] = int(disk[1])
-            self.disks[disk[0]]['write_io']= int(disk[2])
-            self.disks[disk[0]]['read_sectors'] = int(disk[3])
-            self.disks[disk[0]]['write_sectors'] = int(disk[4])
-            self.disks[disk[0]]['io_time'] = int(disk[5])
-
-            read_speed = (int(disk[3]) - r_sec_old) * 1000 / self.time_cost / 2
-            read_speed_format = bytes2human(int(read_speed),'K')
-            write_speed = (int(disk[4]) - w_sec_old) * 1000 / self.time_cost / 2
-            write_speed_format = bytes2human(int(write_speed),'K')
-            iops = (int(disk[1]) - r_io_old + int(disk[2]) - w_io_old) * 1000 / self.time_cost
-            busy = (int(disk[5])-io_time_old)*100 / self.time_cost
-            self.disks[disk[0]]['gauge'].SetValue(int(busy),left_str=f'{busy:.1f}%')
-            self.disks[disk[0]]['st_read'].SetLabel(f'{read_speed_format}/s')
-            self.disks[disk[0]]['st_write'].SetLabel(f'{write_speed_format}/s')
-            self.disks[disk[0]]['st_iops'].SetLabel(f'{iops:.0f}')
-
-
-    def on_close(self,evt):
-        self.MONITER_STAT = False
-        self.Destroy()
 
 class scp_panel(wx.Panel):
     def __init__(self, parent, conn):
@@ -1059,8 +846,8 @@ class scp_panel(wx.Panel):
 
         sizer1 = wx.BoxSizer(wx.HORIZONTAL)
         self.cur_path = None
-        self.tc_path = wx.TextCtrl(self, value='',style=wx.BORDER_SIMPLE
-                                         | wx.TE_PROCESS_ENTER)
+        self.tc_path = wx.TextCtrl(self, value='', style=wx.BORDER_SIMPLE
+                                                         | wx.TE_PROCESS_ENTER)
         self.Bind(wx.EVT_TEXT_ENTER, self.onPathEnter, self.tc_path)
 
         self.tc_path.SetForegroundColour(wx.Colour(150, 150, 150))
@@ -1069,9 +856,11 @@ class scp_panel(wx.Panel):
         bt_back = mBitmapButton(self, 'bitmaps/ssh_back.png', '上级目录')
         bt_down = mBitmapButton(self, 'bitmaps/download.png', '下载')
         bt_up = mBitmapButton(self, 'bitmaps/upload.png', '上传')
-        bt_newdir = mBitmapButton(self, wx.ArtProvider.GetBitmap(wx.ART_NEW_DIR, wx.ART_MENU, size=(18, 18)), '新建目录')
+        bt_newdir = mBitmapButton(self, wx.ArtProvider.GetBitmap(wx.ART_NEW_DIR, wx.ART_MENU, size=(18, 18)),
+                                  '新建目录')
         bt_newfile = mBitmapButton(self, wx.ArtProvider.GetBitmap(wx.ART_NEW, wx.ART_MENU, size=(16, 16)), '新建文件')
-        bt_show_all = platebtn.PlateButton(self, wx.ID_ANY, '', wx.Bitmap('bitmaps/file_showall.png',wx.BITMAP_TYPE_PNG),
+        bt_show_all = platebtn.PlateButton(self, wx.ID_ANY, '',
+                                           wx.Bitmap('bitmaps/file_showall.png', wx.BITMAP_TYPE_PNG),
                                            style=platebtn.PB_STYLE_DEFAULT | platebtn.PB_STYLE_TOGGLE)
         bt_show_all.SetToolTip('显示隐藏')
         bt_refresh.Bind(wx.EVT_BUTTON, self.onRefresh)
@@ -1080,7 +869,7 @@ class scp_panel(wx.Panel):
         bt_up.Bind(wx.EVT_BUTTON, self.onUpload)
         bt_newfile.Bind(wx.EVT_BUTTON, self.onNewFile)
         bt_newdir.Bind(wx.EVT_BUTTON, self.onNewDir)
-        bt_show_all.Bind(wx.EVT_TOGGLEBUTTON,self.onShowHiden)
+        bt_show_all.Bind(wx.EVT_TOGGLEBUTTON, self.onShowHiden)
 
         sizer1.Add(bt_refresh)
         sizer1.Add(bt_back)
@@ -1088,13 +877,14 @@ class scp_panel(wx.Panel):
         sizer1.Add(bt_up)
         sizer1.Add(bt_newdir)
         sizer1.Add(bt_newfile)
-        sizer1.Add((-1,-1),1)
-        sizer1.Add(bt_show_all,0,wx.ALIGN_CENTER)
-        sizer_main.Add(sizer1,0,wx.EXPAND)
+        sizer1.Add((-1, -1), 1)
+        sizer1.Add(bt_show_all, 0, wx.ALIGN_CENTER)
+        sizer_main.Add(sizer1, 0, wx.EXPAND)
         sizer_main.Add(self.tc_path, 0, wx.EXPAND)
 
         self.file_tree = mHyperTreeList(self,
-                                        cols=['名称', '大小', '类型', '修改时间', '权限', '用户/用户组'],show_header=False)
+                                        cols=['名称', '大小', '类型', '修改时间', '权限', '用户/用户组'],
+                                        show_header=False)
         self.file_tree.setColumnWidth([220, 60, 50, 100, 80, 135])
         self.file_tree.SetWindowStyle(wx.NO_BORDER)
         self.file_tree.SetAGWWindowStyleFlag(HTL.TR_FULL_ROW_HIGHLIGHT)
@@ -1108,7 +898,7 @@ class scp_panel(wx.Panel):
         bmp_file_exec = wx.Bitmap('bitmaps/file_exec.png', wx.BITMAP_TYPE_PNG)
         bmp_file_py = wx.Bitmap('bitmaps/file_py.png', wx.BITMAP_TYPE_PNG)
         self.file_tree.setImageList(
-            [bmp_folder, bmp_file, bmp_dir_up, bmp_file_config, bmp_file_compress,bmp_file_exec,bmp_file_py])
+            [bmp_folder, bmp_file, bmp_dir_up, bmp_file_config, bmp_file_compress, bmp_file_exec, bmp_file_py])
         self.file_tree.root = self.file_tree.AddRoot('..', image=2)
         self.item_sel = self.file_tree.root
 
@@ -1166,7 +956,7 @@ class scp_panel(wx.Panel):
                 cur_path += '/%s' % p
         self.goto_dir(cur_path)
 
-    def onNewFile(self,evt):
+    def onNewFile(self, evt):
         dlg = wx.TextEntryDialog(None, '创建路径：%s\n文件名称' % self.conn.scp_path, '新建文件')
         if dlg.ShowModal() == wx.ID_OK:
             name = dlg.GetValue()
@@ -1175,7 +965,7 @@ class scp_panel(wx.Panel):
             frm.Show()
         dlg.Destroy()
 
-    def onNewDir(self,evt):
+    def onNewDir(self, evt):
         dlg = wx.TextEntryDialog(None, '创建路径：%s\n文件夹名称' % self.conn.scp_path, '新建文件夹')
         if dlg.ShowModal() == wx.ID_OK:
             name = dlg.GetValue()
@@ -1187,7 +977,7 @@ class scp_panel(wx.Panel):
             self.refresh_dir()
         dlg.Destroy()
 
-    def onShowHiden(self,evt):
+    def onShowHiden(self, evt):
         if evt.GetEventObject()._pressed:
             self.show_hiden = True
         else:
@@ -1426,7 +1216,7 @@ class scp_panel(wx.Panel):
             info = file.strip().split(' ')
             info = [item for item in info if item != '']
 
-            try:   #没权限导致显示？的文件直接跳过
+            try:  # 没权限导致显示？的文件直接跳过
                 filename = info[8]
             except:
                 continue
@@ -1632,7 +1422,7 @@ class command_panel(wx.Panel):
         self.cmd_on_sel = ''
         self.cmd_bt_dict = {}
 
-        self.cp = PCP.PyCollapsiblePane(self, label='发送命令',
+        self.cp = PCP.PyCollapsiblePane(self, label='批量发送',
                                         agwStyle=wx.CP_NO_TLW_RESIZE | wx.CP_GTK_EXPANDER)
         self.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, self.OnPaneChanged, self.cp)
 

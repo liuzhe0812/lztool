@@ -46,11 +46,11 @@ class sshClient():
         try:
             self.channel.send('su\n')
             buff = ""
-            while not buff.endswith(u'：'):  # true
+            while not buff.endswith(u': '):  # true
                 resp = self.channel.recv(9999)
                 buff += resp.decode('utf8')
             self.channel.send(globals.vdi_root_pwd + '\n')
-            while not buff.endswith(u'：'):  # true
+            while not buff.endswith(u': '):  # true
                 resp = self.channel.recv(9999)
                 buff += resp.decode('utf8')
             self.channel.send('auxo-config-controller --make_src > /root/admin.src\n')
@@ -101,11 +101,11 @@ class sshClient():
         c = self.ssh.invoke_shell()
         c.send('su\n')
         buff = ""
-        while not buff.endswith(u'：'):  # true
+        while not buff.endswith(u': '):  # true
             resp = c.recv(9999)
             buff += resp.decode('utf8')
-
         buff = ''
+
         c.send(globals.vdi_root_pwd + '\n')
         while not buff.endswith('# '):
             resp = c.recv(9999)

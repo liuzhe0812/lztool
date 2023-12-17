@@ -244,7 +244,9 @@ class vdi_server_panel(wx.Panel):
     def on_moniter(self, evt):
         item = evt.GetEventObject()
         conn = item.Parent.conn
-        dialogs.get_info_dlg(conn).Show()
+
+        frm = dialogs.system_moniter(self, conn.host, conn)
+        frm.Show()
 
 
 # 服务器控制台弹出窗口

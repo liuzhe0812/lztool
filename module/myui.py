@@ -10,7 +10,7 @@ from sys import maxsize
 from os import startfile
 from module import globals
 from module.methods import getLabelFromEVT, get_download_path
-
+from module.widgets import platebtn
 
 
 class mButton(wx.Button):
@@ -178,7 +178,7 @@ class mButtonSimple(wx.Button):
 
 class mBitmapButton(buttons.GenBitmapButton):
     def __init__(self, parent, bmp_path, tooltip=''):
-        if isinstance(bmp_path,str):
+        if isinstance(bmp_path, str):
             bmp = wx.Bitmap(bmp_path, wx.BITMAP_TYPE_PNG)
         else:
             bmp = bmp_path
@@ -186,6 +186,38 @@ class mBitmapButton(buttons.GenBitmapButton):
         self.SetBackgroundColour(parent.GetBackgroundColour())
         self.SetToolTip(tooltip)
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
+
+
+class mBitmapTextButton(buttons.GenBitmapTextButton):
+    def __init__(self, parent, bmp_path, text, size=wx.DefaultSize, style=wx.NO_BORDER):
+        buttons.GenBitmapTextButton.__init__(self, parent=parent,
+                                             bitmap=wx.Bitmap(bmp_path, wx.BITMAP_TYPE_PNG),
+                                             label=text,
+                                             size=size,
+                                             style=style)
+        self.Bind(wx.EVT_ENTER_WINDOW, self.enter_window)
+        self.Bind(wx.EVT_LEAVE_WINDOW, self.leave_window)
+
+    def enter_window(self, evt):
+        self.SetBackgroundColour(wx.Colour(224, 238, 249))
+        self.Refresh()
+
+    def leave_window(self, evt):
+        self.SetBackgroundColour(wx.WHITE)
+        self.Refresh()
+
+
+class mPlateButton(platebtn.PlateButton):
+    def __init__(self, parent, bmp_path, text, size=wx.DefaultSize, style=wx.NO_BORDER):
+        if bmp_path:
+            bmp = wx.Bitmap(bmp_path, wx.BITMAP_TYPE_PNG)
+        else:
+            bmp = None
+        platebtn.PlateButton.__init__(self, parent=parent,
+                                      bmp=bmp,
+                                      label=text,
+                                      size=size,
+                                      style=style)
 
 
 class mRadio(wx.BoxSizer):
@@ -273,7 +305,6 @@ class mListCtrl(wx.ListCtrl, listmix.TextEditMixin, listmix.ListCtrlAutoWidthMix
         pos = event.GetPosition()
         pos = self.ScreenToClient(pos)
         self.PopupMenu(self.popupmenu, pos)
-
 
 
 class mHyperTreeList(HTL.HyperTreeList):
@@ -417,12 +448,12 @@ class mInput(wx.BoxSizer):
 
 
 class mChoice(wx.BoxSizer):
-    def __init__(self, parent=None, id=wx.ID_ANY, st_label=u'', choice=None, st_size=(-1, -1),
+    def __init__(self, parent=None, st_label=u'', choice=None, st_size=(-1, -1),
                  font_size=12, color='#95a5a6'):
         if not font_size:
             font_size = wx.NORMAL_FONT.GetPointSize()
         wx.BoxSizer.__init__(self, wx.HORIZONTAL)
-        self.st = wx.StaticText(parent, id, st_label, size=st_size, style=wx.NO_BORDER | wx.ALIGN_CENTER)
+        self.st = wx.StaticText(parent, wx.ID_ANY, st_label, size=st_size, style=wx.NO_BORDER | wx.ALIGN_CENTER)
         self.st.SetBackgroundColour(color)
         self.st.SetForegroundColour('#ffffff')
         self.st.SetFont(wx.Font(font_size, 70, 90, 92, False, u"微软雅黑"))
@@ -753,8 +784,8 @@ class switch(wx.Button):
 
 
 class BTPanel(wx.Panel):
-    def __init__(self, parent=None,size=wx.DefaultSize):
-        wx.Panel.__init__(self, parent, style=wx.NO_BORDER,size=size)
+    def __init__(self, parent=None, size=wx.DefaultSize):
+        wx.Panel.__init__(self, parent, style=wx.NO_BORDER, size=size)
         self.size = size
         self.sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.SetSizer(self.sizer)
@@ -768,7 +799,6 @@ class BTPanel(wx.Panel):
         bt = mBitmapButton(self, bmp_path, tooltip)
         bt.Bind(wx.EVT_BUTTON, onclick_method)
         self.sizer.Add(bt, 0, wx.RIGHT, 3)
-
 
 
 class ToggleButtonBox(wx.Panel):
@@ -1089,7 +1119,6 @@ class FileRenderer(object):
                 print(e)
 
 
-
 class SSH_ULC(ULC.UltimateListCtrl, listmix.ListCtrlAutoWidthMixin):
 
     def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize, style=0):
@@ -1213,19 +1242,29 @@ class SSHPopupWindow(wx.PopupTransientWindow):
     def OnDismiss(self):
         self.Hide()
 
+class mPopupWindow(wx.PopupTransientWindow):
+    def __init__(self, parent, style=wx.BORDER_SIMPLE):
+        wx.PopupTransientWindow.__init__(self, parent, style)
+        self.SetBackgroundColour('white')
+
+    def ProcessLeftDown(self, evt):
+        return wx.PopupTransientWindow.ProcessLeftDown(self, evt)
+
+    def OnDismiss(self):
+        self.Hide()
 
 class mtooltip(wx.Frame):
     def __init__(self, parent):
-        wx.Frame.__init__(self,parent,style=wx.FRAME_NO_TASKBAR | wx.STAY_ON_TOP | wx.FRAME_SHAPED)
+        wx.Frame.__init__(self, parent, style=wx.FRAME_NO_TASKBAR | wx.STAY_ON_TOP | wx.FRAME_SHAPED)
 
         s0 = wx.BoxSizer()
         self.SetSizer(s0)
 
         self.text = wx.StaticText(self)
-        s0.Add(self.text,1,wx.ALIGN_CENTER)
+        s0.Add(self.text, 1, wx.ALIGN_CENTER)
 
         self.SetBackgroundColour(wx.Colour(255, 255, 225))  # 设置窗口背景颜色
         self.Hide()
 
-    def SetLabel(self,txt):
+    def SetLabel(self, txt):
         self.text.SetLabel(txt)

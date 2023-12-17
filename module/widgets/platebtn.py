@@ -598,7 +598,6 @@ class PlateButton(wx.Control):
                 event = PlateBtnDropArrowPressed()
                 event.SetEventObject(self)
                 self.EventHandler.ProcessEvent(event)
-
         self.SetFocus()
 
 
