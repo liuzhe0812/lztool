@@ -493,6 +493,7 @@ class IndexHandler(MixinHandler, tornado.web.RequestHandler):
             chan = ssh.invoke_shell(term='xterm')
             chan.setblocking(0)
             if args[2] == 'Cloud_r00t':
+                # invoke_shell后，这里只能通过延迟方式
                 chan.send('su\n')
                 sleep(1)
                 chan.send(globals.vdi_root_pwd + '\n')

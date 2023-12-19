@@ -42,15 +42,21 @@ class sshClient():
     def server_connect(self):
         self.username = globals.vdi_user
         self.password = globals.vdi_user_pwd
-        self.connect(timeout=int(globals.timeout), server=True)
         try:
-            self.channel.send('su\n')
+            self.ssh.connect(self.host,
+                             username=self.username,
+                             password=self.password,
+                             timeout=int(globals.timeout))
+            self.channel = self.ssh.invoke_shell()
+            self.channel.send('LANG=C su\n')
             buff = ""
-            while not buff.endswith(u': '):  # true
+            while not buff.strip().endswith(u':'):
                 resp = self.channel.recv(9999)
                 buff += resp.decode('utf8')
+
             self.channel.send(globals.vdi_root_pwd + '\n')
-            while not buff.endswith(u': '):  # true
+            buff = ""
+            while not buff.endswith(u'# '):
                 resp = self.channel.recv(9999)
                 buff += resp.decode('utf8')
             self.channel.send('auxo-config-controller --make_src > /root/admin.src\n')
@@ -61,12 +67,6 @@ class sshClient():
     def show_process(self, curent, total):
         p = 100 * curent / total
         self.gauge.SetValue(p)
-
-    def get_sftp_bak(self):
-        self.tran = paramiko.Transport((self.host, int(self.port)))
-        self.tran.connect(username=self.username, password=self.password)
-        sftp = paramiko.SFTPClient.from_transport(self.tran)
-        return sftp
 
     def get_sftp(self):
         return self.ssh.open_sftp()
@@ -99,18 +99,16 @@ class sshClient():
 
     def server_recv(self, cmd):
         c = self.ssh.invoke_shell()
-        c.send('su\n')
+        c.send('LANG=C su\n')
         buff = ""
-        while not buff.endswith(u': '):  # true
+        while not buff.endswith(u': '):
             resp = c.recv(9999)
             buff += resp.decode('utf8')
-        buff = ''
-
         c.send(globals.vdi_root_pwd + '\n')
+        buff = ''
         while not buff.endswith('# '):
             resp = c.recv(9999)
             buff += resp.decode('utf8')
-
         buff = ''
         c.send(cmd + '\n')
         while not buff.endswith('# '):

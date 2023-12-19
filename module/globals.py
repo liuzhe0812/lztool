@@ -16,5 +16,6 @@ vdi_user_pwd = None
 vdi_mysql_pwd = None
 
 wssh_port=None
+download_path=None
 
 multi_ssh_conn = {} # IP: conn

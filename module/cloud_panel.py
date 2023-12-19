@@ -34,7 +34,6 @@ class login_panel(wx.Panel):
 
     def on_connect(self, evt):
         host = self.tc_server.GetValue()
-        self.vdi_conn.password = globals.vdi_user_pwd
         self.vdi_conn.host = host
         self.vdi_db.host = host
         try:
@@ -105,9 +104,6 @@ class vdi_server_panel(wx.Panel):
         bSizerall = wx.BoxSizer(wx.VERTICAL)
         bSizer1 = wx.BoxSizer(wx.HORIZONTAL)
 
-        # bt_time = mButton(self, '时间同步', 'blue', font_size=10, size=(60, 23))
-        # bt_time.Bind(wx.EVT_BUTTON, self.on_bt_time)
-        # bSizer1.Add(bt_time, 0, wx.LEFT, 5)
         bSizer1.Add((0, 0), 1)
 
         self.bt_refresh = mButton(self, '刷新', color='blue', size=(40, 23), font_size=10)
@@ -194,6 +190,7 @@ class vdi_server_panel(wx.Panel):
             idx = self.lc_server.insert(console_item)
             self.lc_server.SetStringItem(idx, 3, '无')
             btp = BTPanel(self.lc_server,size=(-1,30))
+            btp.SetBackgroundColour('white')
             btp.add_bitmap_button(bmp_path='bitmaps/console.png', tooltip='控制台',
                                   onclick_method=self.on_ssh)
             btp.add_bitmap_button(bmp_path='bitmaps/moniter.png', tooltip='系统监测',
@@ -205,6 +202,8 @@ class vdi_server_panel(wx.Panel):
 
             self.console_conn = ssh.sshClient(host_ip=console_item[0])
             self.console_conn.idx = idx
+            self.console_conn.username = globals.vdi_user
+            self.console_conn.password = globals.vdi_user_pwd
             btp.conn = self.console_conn
 
         for item in re:
@@ -244,9 +243,10 @@ class vdi_server_panel(wx.Panel):
     def on_moniter(self, evt):
         item = evt.GetEventObject()
         conn = item.Parent.conn
-
+        conn.connect()
         frm = dialogs.system_moniter(self, conn.host, conn)
         frm.Show()
+        frm.Raise()
 
 
 # 服务器控制台弹出窗口
@@ -482,19 +482,32 @@ class vdi_instance_panel(mPanel):
                 mMessageBox('无法连接节点%s' % conn.host)
         # 查vnc密码
         try:
-            re = conn.server_recv('cat /etc/libvirt/qemu/%s.xml | grep vnc' % qemu_id)
+            conn.channel.send('python\n')
+            buff = ""
+            while not buff.endswith(u'>>> '):
+                resp = conn.channel.recv(9999)
+                buff += resp.decode('utf8')
+            conn.channel.send('from cloudosclient.client import client as c\n')
+            buff = ""
+            while not buff.endswith(u'>>> '):
+                resp = conn.channel.recv(9999)
+                buff += resp.decode('utf8')
+            conn.channel.send("c.compute.get_instance_vnc_console('%s')\n"%inst_id)
+            buff = ""
+            while not buff.endswith(u'>>> '):
+                resp = conn.channel.recv(9999)
+                buff += resp.decode('utf8')
         except Exception as e:
             mMessageBox(str(e))
-        re = re.split('passwd=')[1]
-        password = re.split('\'')[1]
+        res = buff.split('\n')[1].split(',')[-3:-1]
+        url = res[0].split('http://')[1][:-1]
+        url = f'https://{url}'
+        password = res[1].split(':')[1][3:-1]
         pyperclip.copy(password)
         mMessageBox('VNC密码：%s，已复制到剪切板' % password)
 
         # 查URL
-        re = self.vdi_conn.server_recv('source /root/admin.src; nova get-vnc-console %s novnc | grep novnc' % inst_id)
-        re = re.split('http://')[1]
-        url = re.split(' ')[0]
-        webbrowser.open_new('http://' + url)
+        webbrowser.open_new(url)
 
         if conn != self.vdi_conn:
             conn.close()
@@ -503,13 +516,14 @@ class vdi_instance_panel(mPanel):
         inst_id = self.inst_list.getItemData(1)
         host, qemu_id = self.check(inst_id)
         conn = self.get_agent_conn(host)
-
+        print('b')
         file_path = '/etc/libvirt/qemu/%s.xml' % qemu_id
 
         dlg = dialogs.xml_viewer(file_path)
         dlg.m_button1.Hide()
         dlg.m_button2.Hide()
         data = conn.server_recv('cat %s' % file_path)
+        print(data)
         dlg.data.SetValue(data)
         if dlg.ShowModal() == wx.ID_OK:
             pass
@@ -579,8 +593,7 @@ class vdi_vm_panel(wx.Panel):
         bSizer1.Add(self.radio, 0, wx.EXPAND | wx.RIGHT, 5)
 
         self.list_panel = mPanel(self, '用户列表')
-        self.personal_list = mListCtrl(self.list_panel, ['id', '用户名', '姓名'], border=False,
-                                       method=self.on_plist_popmenu, popupmemu=['重置密码'])
+        self.personal_list = mListCtrl(self.list_panel, ['id', '用户名', '姓名'], border=False)
         self.personal_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_left_list_selected)
         self.personal_list.SetColumnWidth(0, 40)
         self.personal_list.SetColumnWidth(1, 80)
@@ -661,10 +674,13 @@ class vdi_vm_panel(wx.Panel):
         try:
             dlg = mWarnDlg('是否要将用户%s密码重置为oseasy?' % username)
             if dlg.ShowModal() == wx.ID_OK:
-                cmd = "update thor_console.user_edu set password='f4e282a29388abe98e784113dcddf0f0' where name='%s'" % username
-                self.vdi_db.cmd(cmd)
+                cmd1 = "update thor_console.user_edu set password='f4e282a29388abe98e784113dcddf0f0' where name='%s' and deleted=0" % username
+                cmd2 = "update uias.uias_user set password='f4e282a29388abe98e784113dcddf0f0' where name='%s' and deleted=0" % username
+                self.vdi_db.cmd(cmd1)
+                logging.info(f'数据库：{cmd1}')
+                self.vdi_db.cmd(cmd2)
+                logging.info(f'数据库：{cmd2}')
                 self.vdi_db.conn.commit()
-                logging.info(f'数据库：{cmd}')
                 mMessageBox('重置成功！')
             dlg.Destroy()
         except Exception as e:
@@ -842,3 +858,5 @@ class vdi_log_panel(wx.Panel):
 
     def clean_log(self, evt):
         self.log_tc.Clear()
+
+

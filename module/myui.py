@@ -1213,14 +1213,12 @@ class SSHPopupWindow(wx.PopupTransientWindow):
         panel = wx.Panel(self)
         self.SetBackgroundColour(globals.bgcolor)
 
-        txt1 = wx.StaticText(panel, -1, '下载：', style=wx.NO_BORDER)
-        self.st_path = wx.StaticText(panel, -1, '', size=(250, -1), style=wx.NO_BORDER)
+        self.st_path = wx.StaticText(panel, -1, '', size=(290, -1), style=wx.NO_BORDER)
         self.bt_open = mBitmapButton(panel, 'bitmaps/openfile.png', '打开')
         self.bt_cancel = mBitmapButton(panel, 'bitmaps/ssh_cancel.png', '取消')
 
         sizer1 = wx.BoxSizer(wx.HORIZONTAL)
-        sizer1.Add(txt1, 0, wx.LEFT | wx.ALIGN_CENTER, 5)
-        sizer1.Add(self.st_path, 1, wx.ALIGN_CENTER)
+        sizer1.Add(self.st_path, 1, wx.ALIGN_CENTER|wx.LEFT,5)
         sizer1.Add(self.bt_open, 0)
         sizer1.Add(self.bt_cancel, 0)
 
@@ -1254,7 +1252,7 @@ class mPopupWindow(wx.PopupTransientWindow):
         self.Hide()
 
 class mtooltip(wx.Frame):
-    def __init__(self, parent):
+    def __init__(self, parent,style=wx.BORDER_SIMPLE):
         wx.Frame.__init__(self, parent, style=wx.FRAME_NO_TASKBAR | wx.STAY_ON_TOP | wx.FRAME_SHAPED)
 
         s0 = wx.BoxSizer()

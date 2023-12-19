@@ -168,6 +168,7 @@ class Myframe(wx.Frame):
         globals.vdi_user_pwd = self.config.get('oseasy', 'vdi_user_pwd')
         globals.vdi_mysql_pwd = self.config.get('oseasy', 'mysql_pwd')
         globals.wssh_port = self.config.get('oseasy', 'wssh_port')
+        globals.download_path = self.config.get('ssh', 'download_path')
 
         if not self.config.get('ssh', 'download_path'):
             desktop = methods.get_desktop_path()
@@ -225,6 +226,7 @@ class Myframe(wx.Frame):
             globals.vdi_user = dlg.vdi_user.GetValue()
             globals.vdi_user_pwd = dlg.vdi_user_pwd.GetValue()
             globals.vdi_mysql_pwd = dlg.mysql_pwd.GetValue()
+            globals.download_path = dlg.download_path.GetValue()
 
             self.config.set('ssh', 'max_thread', str(globals.max_thread))
             self.config.set('ssh', 'timeout', str(globals.timeout))
@@ -233,6 +235,7 @@ class Myframe(wx.Frame):
             self.config.set('oseasy', 'vdi_user_pwd', globals.vdi_user_pwd)
             self.config.set('oseasy', 'mysql_pwd', globals.vdi_mysql_pwd)
             self.config.set('oseasy', 'wssh_port', globals.wssh_port)
+            self.config.set('ssh', 'download_path', globals.download_path)
             self.config.write(open('config.ini', "w"))
         dlg.Destroy()
 
@@ -242,6 +245,23 @@ class Myframe(wx.Frame):
         val =  str(pos[0])+','+str(pos[1])+','+str(size[0])+','+str(size[1])
         self.config.set('default', 'last_rect',val)
         self.config.write(open('config.ini', "r+"))
+
+        host = self.mainPnl.panel_ssh.host.GetValue()
+        port = self.mainPnl.panel_ssh.port.GetValue()
+        username = self.mainPnl.panel_ssh.username.GetValue()
+        password = self.mainPnl.panel_ssh.password.GetValue()
+        desc = self.mainPnl.panel_ssh.desc.GetValue()
+        num = self.mainPnl.panel_ssh.num.GetValue()
+
+        self.config.read('template.ini')
+        self.config.set('default', 'host', host)
+        self.config.set('default', 'port', port)
+        self.config.set('default', 'user', username)
+        self.config.set('default', 'password', password)
+        self.config.set('default', 'desc', desc)
+        self.config.set('default', 'num', num)
+        self.config.write(open('template.ini', "w"))
+
         self.Destroy()
 
 

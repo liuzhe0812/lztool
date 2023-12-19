@@ -198,6 +198,7 @@ class ssh_panel(wx.Panel):
         wid = self.ssh_menu.GetSize()[0]
         self.ssh_menu.Position(pos, (-5 - wid, 30))
         self.ssh_menu.Show(True)
+        self.ssh_menu.st_path.SetLabel(methods.get_config('ssh', 'download_path'))
 
     def on_bt_split(self, evt):
 
@@ -230,6 +231,7 @@ class ssh_panel(wx.Panel):
             return
         frm = system_moniter(self, conn.host, conn)
         frm.Show()
+        frm.Raise()
 
     def onOpenDownloadDir(self, evt):
         path = self.ssh_menu.st_path.GetLabel()
@@ -449,7 +451,6 @@ class ssh_panel(wx.Panel):
         self.port.SetValue(info[2])
         self.username.SetValue(info[3])
         self.password.SetValue(info[4])
-        # self.DeleteAllPages(False)
         self.start_connect(info)
         if self.CB_save.GetValue():
             self.save_config_file(info)
@@ -460,16 +461,6 @@ class ssh_panel(wx.Panel):
 
         self.total = int(num)
         self.done = 0
-
-        sshconfig = configparser.ConfigParser()
-        sshconfig.read('template.ini')
-        sshconfig.set('default', 'host', host)
-        sshconfig.set('default', 'port', port)
-        sshconfig.set('default', 'user', user)
-        sshconfig.set('default', 'password', password)
-        sshconfig.set('default', 'desc', desc)
-        sshconfig.set('default', 'num', num)
-        sshconfig.write(open('template.ini', "w"))
 
         # 初始化session tree
         conn_list = []
@@ -934,7 +925,7 @@ class scp_panel(wx.Panel):
             if txt:
                 self.tooltip_frame.SetLabel(txt)
                 self.tooltip_frame.SetSize(self.tooltip_frame.GetBestSize())
-                self.tooltip_frame.Show()
+                self.tooltip_frame.ShowWithoutActivating()
         else:
             self.tooltip_frame.Hide()
 
@@ -1659,3 +1650,4 @@ class command_panel(wx.Panel):
                 self.cmd_bt_dict[name].Destroy()
                 self.pnl_r.Layout()
             dlg.Destroy()
+

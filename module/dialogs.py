@@ -3,6 +3,7 @@ import os, configparser, shutil, re, time, wx.adv, logging
 from _thread import start_new_thread
 from module import methods
 from module.myui import *
+import module.widgets.filebrowsebutton as filebrowse
 
 
 class create_connect(wx.Dialog):
@@ -1519,9 +1520,15 @@ class config_dlg(wx.adv.PropertySheetDialog):
         sizer3.Add(txt3, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
         sizer3.Add(self.wssh_port, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
 
+        sizer4 = wx.BoxSizer(wx.HORIZONTAL)
+        self.download_path = filebrowse.DirBrowseButton(panel, -1, size=(450, -1))
+        self.download_path.SetValue(globals.download_path)
+        sizer4.Add(self.download_path, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+
         topSizer.Add(sizer1, 0, wx.EXPAND | wx.ALL, 5)
         topSizer.Add(sizer2, 0, wx.EXPAND | wx.ALL, 5)
         topSizer.Add(sizer3, 0, wx.EXPAND | wx.ALL, 5)
+        topSizer.Add(sizer4, 0, wx.EXPAND | wx.ALL, 5)
 
         panel.SetSizer(topSizer)
         return panel
@@ -1568,6 +1575,8 @@ class system_moniter(wx.Frame):
         wx.Frame.__init__(self, parent=parent, title=title,
                           style=wx.DEFAULT_FRAME_STYLE & ~(wx.MINIMIZE_BOX | wx.MAXIMIZE_BOX))
         self.conn = conn
+        if not self.conn:
+            self.conn.connect()
         self.MONITER_STAT = True
         self.time_cost = 0  # 单位：秒
         self.old_time = 0
@@ -1587,7 +1596,7 @@ class system_moniter(wx.Frame):
                                  "echo '-separate-';"
                                  "uname -r;"
                                  "echo '-separate-';"
-                                 "lscpu | grep -E 'Model name|Socket\(s\)|Core\(s\)|Thread\(s\)';"
+                                 "LANG=c lscpu | grep -E 'Model name|Socket\(s\)|Core\(s\)|Thread\(s\)';"
                                  "echo '-separate-';"
                                  "lspci | grep -i Ethernet;"
                                  "echo '-separate-';"
@@ -1835,7 +1844,7 @@ class system_moniter(wx.Frame):
         s1str.SetFont(wx.Font(9, 70, 90, 92, False, '微软雅黑'))
         s1.Add(s1str, 0)
         s1.Add(wx.StaticText(self.pwin_system, label=kernal), 1)
-        sizer.Add(s1, 0, wx.LEFT | wx.RIGHT | wx.TOP,10)
+        sizer.Add(s1, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
 
         s2 = wx.BoxSizer(wx.HORIZONTAL)
         s2str = wx.StaticText(self.pwin_system, label='CPU型号: ', size=(60, -1), style=wx.ALIGN_RIGHT)
@@ -1851,7 +1860,7 @@ class system_moniter(wx.Frame):
         s3.Add(wx.StaticText(self.pwin_system,
                              label=f'{cpu_count}路/{core_per_cpu * cpu_count}核/{cpu_count * core_per_cpu * thread_per_core}线程'),
                1)
-        sizer.Add(s3, 0, wx.LEFT | wx.RIGHT |wx.BOTTOM, 10)
+        sizer.Add(s3, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         self.pwin_system.SetSize(self.pwin_system.GetBestSize())
         self.pwin_system.Layout()
@@ -1860,7 +1869,6 @@ class system_moniter(wx.Frame):
         self.pwin_net = mPopupWindow(self)
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.pwin_net.SetSizer(sizer)
-
         sizer.Add(wx.StaticText(self.pwin_net, label=self.basic_info[3].strip()), 1, wx.ALL, 10)
 
         self.pwin_net.SetSize(self.pwin_net.GetBestSize())
