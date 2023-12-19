@@ -1266,3 +1266,4 @@ class mtooltip(wx.Frame):
 
     def SetLabel(self, txt):
         self.text.SetLabel(txt)
+

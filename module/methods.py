@@ -1,7 +1,18 @@
 # -*- coding: utf-8 -*-
 import logging
-import threading,configparser,winreg,os,codecs
+import threading,configparser,winreg,os,codecs,wx.html2
 
+def get_web_backend():
+    backends = [wx.html2.WebViewBackendEdge, wx.html2.WebViewBackendIE]
+    BACKEND = None
+    for id in backends:
+        if wx.html2.WebView.IsBackendAvailable(id) and BACKEND is None:
+            if id == wx.html2.WebViewBackendIE:
+                key_path = r"Software\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BROWSER_EMULATION"
+                check_and_create_registry_key(key_path, 'lztool.exe', 11000)
+                wx.html2.WebView.MSWSetEmulationLevel(wx.html2.WEBVIEWIE_EMU_IE11)
+            BACKEND = id
+    return BACKEND
 
 def get_desktop_path():
     key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,

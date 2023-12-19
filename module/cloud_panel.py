@@ -254,12 +254,10 @@ class server_shell_panel(wx.Panel):
     def __init__(self, parent, conn):
         wx.Panel.__init__(self, parent, style=wx.TAB_TRAVERSAL)
         self.SetBackgroundColour(globals.bgcolor)
-
-        self.browser = WebView.New(self, backend=wx.html2.WebViewBackendEdge)
+        self.browser = WebView.New(self, backend=methods.get_web_backend())
         self.conn = conn
         bsizer = wx.BoxSizer(wx.VERTICAL)
         bsizer.Add(self.browser, 1, wx.EXPAND)
-
         self.SetSizer(bsizer)
         self.refresh()
 

@@ -135,6 +135,7 @@ class Myframe(wx.Frame):
         self.opacity_out = 255
         self.deltaN = -70
         self.delta = wx.Point(0, 0)
+        self.web_backend = methods.get_web_backend()
         self.ssh_menu = SSHPopupWindow(self, wx.SIMPLE_BORDER)
 
         self.config = wx.GetApp().GetConfig()

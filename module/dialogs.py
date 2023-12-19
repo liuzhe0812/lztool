@@ -1653,8 +1653,8 @@ class system_moniter(wx.Frame):
         st_swap = wx.StaticText(self, label='交换', style=wx.ALIGN_RIGHT)
 
         st_1 = wx.StaticText(self, label='运行', size=(self.st_width, -1), style=wx.ALIGN_RIGHT)
-        st_2 = wx.StaticText(self, label='负载', size=(self.st_width, -1), style=wx.ALIGN_RIGHT)
-        self.runtime = wx.StaticText(self, label='')
+        st_2 = wx.StaticText(self, label='负载', style=wx.ALIGN_RIGHT)
+        self.runtime = wx.StaticText(self, label='',size=(80,-1))
         self.load = wx.StaticText(self, label='')
 
         s1l0.Add(st_1, 0, wx.TOP | wx.LEFT, 5)

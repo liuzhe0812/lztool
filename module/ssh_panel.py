@@ -12,16 +12,6 @@ from module.widgets import auiNotebook as ANB
 import module.widgets.aui as aui
 import wx.lib.agw.pycollapsiblepane as PCP
 
-backends = [wx.html2.WebViewBackendEdge, wx.html2.WebViewBackendIE]
-BACKEND = None
-for id in backends:
-    if WebView.IsBackendAvailable(id) and BACKEND is None:
-        if id == wx.html2.WebViewBackendIE:
-            key_path = r"Software\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BROWSER_EMULATION"
-            methods.check_and_create_registry_key(key_path, 'lztool.exe', 11000)
-            WebView.MSWSetEmulationLevel(wx.html2.WEBVIEWIE_EMU_IE11)
-        BACKEND = id
-
 AUI_BUTTON_ADD = 201
 AUI_BUTTON_FILETRANSFER = 202
 
@@ -683,7 +673,7 @@ class shell_panel(wx.Panel):
         self.SetBackgroundColour(globals.bgcolor)
         s0 = wx.BoxSizer()
         self.SetSizer(s0)
-        self.browser = WebView.New(self, backend=BACKEND)
+        self.browser = WebView.New(self, backend=self.GetTopLevelParent().web_backend)
         s0.Add(self.browser, 1, wx.EXPAND)
 
         self.refresh()
@@ -800,7 +790,7 @@ class CopyPage(wx.Panel):
         self.conn = conn
         self.SetBackgroundColour(globals.bgcolor)
 
-        self.browser = WebView.New(self, backend=BACKEND)
+        self.browser = WebView.New(self, backend=self.GetTopLevelParent().web_backend)
         bsizer = wx.BoxSizer(wx.VERTICAL)
         bsizer.Add(self.browser, 1, wx.EXPAND)
 
@@ -816,7 +806,6 @@ class CopyPage(wx.Panel):
         else:
             url = "http://127.0.0.1:%s" % globals.wssh_port
         self.browser.LoadURL(url)
-
 
 
 class scp_panel(wx.Panel):
