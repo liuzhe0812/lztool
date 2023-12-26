@@ -645,15 +645,16 @@ class vdi_vm_panel(wx.Panel):
             self.on_chPasswd(None)
 
     def on_chClass(self, evt):
-        try:
-            poolname = self.teaching_list.getItemData(1)
-            re = self.vdi_db.cmd("select name from thor_console.pool where deleted=0")
-            pools = []
-            for item in re:
-                pools.append(item[0])
-            dlg = dialogs.vdi_chClass(poolname, pools)
-            if dlg.ShowModal() == wx.ID_OK:
-                poolname = dlg.choice.GetStringSelection()
+
+        poolname = self.teaching_list.getItemData(1)
+        re = self.vdi_db.cmd("select name from thor_console.pool where deleted=0")
+        pools = []
+        for item in re:
+            pools.append(item[0])
+        dlg = dialogs.vdi_chClass(poolname, pools)
+        if dlg.ShowModal() == wx.ID_OK:
+            poolname = dlg.choice.GetStringSelection()
+            try:
                 re = self.vdi_db.cmd(
                     "select id from thor_console.pool where deleted=0 and name='%s'" % poolname)
                 pool_id = re[0][0]
@@ -661,11 +662,12 @@ class vdi_vm_panel(wx.Panel):
                     pool_id, self.teaching_list.getItemData(1))
                 self.vdi_db.cmd(cmd)
                 self.vdi_db.conn.commit()
-                logging.info(f'数据库：{cmd}')
-                mMessageBox('修改成功！')
-            dlg.Destroy()
-        except Exception as e:
-            mMessageBox(str(e))
+            except Exception as e:
+                mMessageBox(str(e))
+            logging.info(f'数据库：{cmd}')
+            mMessageBox('修改成功！')
+        dlg.Destroy()
+
 
     def on_chPasswd(self, evt):
         username = self.personal_list.getItemData(1)

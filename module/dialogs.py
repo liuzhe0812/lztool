@@ -1368,7 +1368,7 @@ class vdi_chClass(wx.Dialog):
         self.bt_cancel = mButton(self, id=wx.ID_CANCEL, label="取消", color='red')
         linebt.Add(self.bt_cancel, 0, wx.LEFT, 10)
 
-        sbSizerAll.Add(linebt, 0, wx.ALL | wx.EXPAND | wx.ALIGN_CENTER, 10)
+        sbSizerAll.Add(linebt, 0, wx.ALL | wx.EXPAND , 20)
 
         self.SetSizer(sbSizerAll)
 

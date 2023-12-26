@@ -21,7 +21,7 @@ class ssh_panel(wx.Panel):
         wx.Panel.__init__(self, parent)
         self.new_thread = methods.new_thread
         self.link_ok = 0  # 连接成功数
-        self._IsMulti = True
+        self.isShellOnly=False
         self.sftp_status = False
         self.is_split = False
         globals.multi_ssh_conn = {}  # host : {'conn','gauge'}
@@ -36,6 +36,7 @@ class ssh_panel(wx.Panel):
         self.ssh_left_panel = wx.Panel(self.splitter_all)
 
         self.splitter_all.SplitVertically(self.ssh_left_panel, self.ssh_right_panel, 231)
+        self.splitter_all.SetMinimumPaneSize(50)
         self.panel_multi_ssh = wx.Panel(self.ssh_left_panel, size=(231, -1))  # 批量连接设置
         self.splitter_left = wx.SplitterWindow(self.ssh_left_panel)
 
@@ -162,6 +163,7 @@ class ssh_panel(wx.Panel):
         self.Bind(aui.EVT_AUINOTEBOOK_PAGE_CLOSED, self.onNotebookPageClose, self.nb_console)
         self.TopLevelParent.menubarPnl.bt_transfer_menu.Bind(wx.EVT_BUTTON, self.ShowSSHMenu)
         self.TopLevelParent.menubarPnl.bt_split.Bind(wx.EVT_BUTTON, self.on_bt_split)
+        self.TopLevelParent.menubarPnl.bt_shellonly.Bind(wx.EVT_BUTTON, self.on_bt_shellonly)
         self.TopLevelParent.menubarPnl.bt_moniter.Bind(wx.EVT_BUTTON, self.on_bt_moniter)
         self.ssh_menu.bt_open.Bind(wx.EVT_BUTTON, self.onOpenDownloadDir)
         self.ssh_menu.bt_cancel.Bind(wx.EVT_BUTTON, self.onSFTPCancel)
@@ -214,6 +216,18 @@ class ssh_panel(wx.Panel):
         else:
             self.nb_console.UnSplit()
             self.is_split = False
+
+    def on_bt_shellonly(self,evt):
+        if not self.isShellOnly:
+            self.splitter_all.Unsplit(self.ssh_left_panel)
+            self.cmd_panel.Hide()
+
+        else:
+            self.splitter_all.SplitVertically(
+                self.ssh_left_panel, self.ssh_right_panel, 231)
+            self.cmd_panel.Show()
+        self.ssh_right_panel.Layout()
+        self.isShellOnly = not self.isShellOnly
 
     def on_bt_moniter(self, evt):
         conn = self.get_cur_page().conn
@@ -1380,6 +1394,7 @@ class scp_panel(wx.Panel):
             self.ssh_panel.ShowSSHMenu()
             remote_path = path
             local_path = methods.get_config('ssh', 'download_path')
+            print(local_path)
             if not os.path.exists(local_path):
                 os.makedirs(local_path)
             start_new_thread(self.download, (local_path, remote_path))

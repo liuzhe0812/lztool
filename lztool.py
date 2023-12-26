@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 __authur__ = 'liuzhe'
-__version__ = '4.0'
+__version__ = '4.0.1'
 
 import logging, wx.grid, sys,os,configparser,wx.grid
 from module.widgets.TabContainer import TabContainer
@@ -18,8 +18,6 @@ class MyMenuBar(wx.Panel):
         style = (wx.BORDER_NONE)
         super(wx.Panel, self).__init__(parent,style=style)
 
-        self.bitmaps_dir = wx.GetApp().GetBitmapsDir()
-
         self.parent = parent
 
         self.SetBackground()
@@ -33,6 +31,7 @@ class MyMenuBar(wx.Panel):
 
     def CreateCtrls(self):
         self.bt_moniter = mBitmapButton(self,'bitmaps/bt_moniter.png','系统监控')
+        self.bt_shellonly = mBitmapButton(self,'bitmaps/ssh_only.png','精简模式')
         self.bt_split = mBitmapButton(self,'bitmaps/split.png','分屏显示')
         self.bt_showlog = mBitmapButton(self,'bitmaps/showlog.png','错误日志')
         self.bt_config = mBitmapButton(self,'bitmaps/config.png','设置')
@@ -52,6 +51,7 @@ class MyMenuBar(wx.Panel):
         mainSizer.Add((1,-1),1,wx.EXPAND)
 
         mainSizer.Add(self.bt_moniter, 0, wx.LEFT|wx.ALIGN_CENTER, 5)
+        mainSizer.Add(self.bt_shellonly, 0, wx.ALIGN_CENTER)
         mainSizer.Add(self.bt_split, 0, wx.ALIGN_CENTER)
         mainSizer.Add(self.bt_showlog, 0, wx.ALIGN_CENTER)
         mainSizer.Add(self.bt_config, 0,wx.ALIGN_CENTER)
@@ -174,6 +174,7 @@ class Myframe(wx.Frame):
         if not self.config.get('ssh', 'download_path'):
             desktop = methods.get_desktop_path()
             default_download_path = desktop + '\\lztdownload'
+            globals.download_path = default_download_path
             self.config.set('ssh', 'download_path', default_download_path)
             self.config.write(open('config.ini', "r+"))
 
