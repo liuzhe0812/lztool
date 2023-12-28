@@ -292,12 +292,13 @@ class vdi_image_panel(wx.Panel):
         self.lc_image_panel = mPanel(self, '模板列表')
         bSizer2.Add(self.lc_image_panel, 0, wx.EXPAND | wx.BOTTOM, 5)
 
-        self.lc_image = mListCtrl(self.lc_image_panel, ['id', '模板名', '类型'], border=False,
-                                  method=self.on_image_popmenu, popupmemu=['重置状态'])
+        self.lc_image = mListCtrl(self.lc_image_panel, ['id', '模板名', '类型','架构'], searchctrl=True)
+        self.lc_image.SetPopupMenu(['重置状态'],self.on_image_popmenu)
         self.lc_image.SetColumnWidth(0, 40)
         self.lc_image.SetColumnWidth(1, 120)
         self.lc_image.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_image_select)
 
+        self.lc_image_panel.Add(self.lc_image.search_ctrl, 0, wx.EXPAND)
         self.lc_image_panel.Add(self.lc_image, 1, wx.EXPAND)
 
         linebt = wx.BoxSizer(wx.HORIZONTAL)
@@ -359,9 +360,10 @@ class vdi_image_panel(wx.Panel):
 
     def refresh(self, evt):
         self.lc_image.DeleteAllItems()
+        self.lc_image.data.clear()
         try:
             data = self.vdi_db.cmd(
-                'select id,name,type_code from thor_console.images where deleted=0 and type_code<5 order by id')
+                'select id,name,type_code,product_type from thor_console.images where deleted=0 and type_code<5 order by id')
         except Exception as e:
             mMessageBox(str(e))
             return
@@ -396,6 +398,7 @@ class vdi_image_panel(wx.Panel):
         self.image_name = self.lc_image.getItemData(1)
         self.choice_image.SetLabel(self.image_name)
         self.lc_inst_panel.inst_list.DeleteAllItems()
+        self.lc_inst_panel.inst_list.data.clear()
         id = evt.GetText()
         data = self.vdi_db.cmd(
             "select b.instance_id from thor_console.images as a INNER JOIN thor_console.instance_extra as b where a.id=b.image_id and b.graphic_type='vnc' and b.deleted=0 and a.id=%s" % id)
@@ -432,9 +435,8 @@ class vdi_instance_panel(mPanel):
         self.vdi_conn = parent.vdi_conn
 
         self.inst_list = mListCtrl(self,
-                                   ['名称', 'UUID', '宿主机', '系统盘', '数据盘', '系统盘模板', '数据盘模板'],
-                                   border=False, editable=True,
-                                   method=self.on_inst_popmenu, popupmemu=['查看桌面', 'xml配置', 'qemu日志'])
+                                   ['名称', 'UUID', '宿主机', '系统盘', '数据盘', '系统盘模板', '数据盘模板'],editable=True)
+        self.inst_list.SetPopupMenu(['查看桌面', 'xml配置', 'qemu日志'],self.on_inst_popmenu)
         self.inst_list.SetColumnWidth(0, 120)
         self.inst_list.SetColumnWidth(1, 270)
         self.inst_list.SetColumnWidth(2, 100)
@@ -591,15 +593,17 @@ class vdi_vm_panel(wx.Panel):
         bSizer1.Add(self.radio, 0, wx.EXPAND | wx.RIGHT, 5)
 
         self.list_panel = mPanel(self, '用户列表')
-        self.personal_list = mListCtrl(self.list_panel, ['id', '用户名', '姓名'], border=False)
+        self.personal_list = mListCtrl(self.list_panel, ['id', '用户名', '姓名'], searchctrl=True)
         self.personal_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_left_list_selected)
         self.personal_list.SetColumnWidth(0, 40)
         self.personal_list.SetColumnWidth(1, 80)
-        self.teaching_list = mListCtrl(self.list_panel, ['id', '场景名'], border=False,
-                                       method=self.on_tlist_popmenu, popupmemu=['修改教室'])
+        self.teaching_list = mListCtrl(self.list_panel, ['id', '场景','教室'],searchctrl=True)
+        self.teaching_list.SetPopupMenu(['修改教室'],self.on_tlist_popmenu)
         self.teaching_list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_left_list_selected)
         self.teaching_list.SetColumnWidth(0, 50)
         self.teaching_list.SetColumnWidth(1, 120)
+        self.list_panel.sizer.Add(self.personal_list.search_ctrl, 0, wx.EXPAND)
+        self.list_panel.sizer.Add(self.teaching_list.search_ctrl, 0, wx.EXPAND)
         self.list_panel.sizer.Add(self.personal_list, 1, wx.EXPAND)
         self.list_panel.sizer.Add(self.teaching_list, 1, wx.EXPAND)
 
@@ -668,7 +672,6 @@ class vdi_vm_panel(wx.Panel):
             mMessageBox('修改成功！')
         dlg.Destroy()
 
-
     def on_chPasswd(self, evt):
         username = self.personal_list.getItemData(1)
         try:
@@ -687,14 +690,20 @@ class vdi_vm_panel(wx.Panel):
             mMessageBox(str(e))
 
     def refresh(self, evt):
-        self.hide_left_list()
+        self.personal_list.Hide()
+        self.teaching_list.Hide()
+        self.teaching_list.search_ctrl.Hide()
+        self.personal_list.search_ctrl.Hide()
         self.inst_list.DeleteAllItems()
         self.personal_list.DeleteAllItems()
         self.teaching_list.DeleteAllItems()
+        self.personal_list.data.clear()
+        self.teaching_list.data.clear()
         if not self.radio.focus:
             return
         elif self.radio.focus == '个人':
             self.personal_list.Show()
+            self.personal_list.search_ctrl.Show()
             self.bt_chClass.Hide()
             self.bt_chPasswd.Show()
             self.Layout()
@@ -705,28 +714,26 @@ class vdi_vm_panel(wx.Panel):
                 mMessageBox(str(e))
                 return
             for item in data:
-                self.personal_list.addRow(item)
+                self.personal_list.addRow(list(item))
 
         elif self.radio.focus == '教学':
             self.teaching_list.Show()
+            self.teaching_list.search_ctrl.Show()
             self.bt_chPasswd.Hide()
             self.bt_chClass.Show()
             self.Layout()
             try:
                 data = self.vdi_db.cmd(
-                    'select id,name from thor_console.mode where deleted=0 and product_type="vdi" order by id DESC')
+                    'select a.id,a.name,b.name from thor_console.mode as a INNER JOIN thor_console.pool as b where a.deleted=0 and a.product_type="vdi" and b.id=a.pool_id order by id DESC')
             except Exception as e:
                 mMessageBox(str(e))
                 return
             for item in data:
-                self.teaching_list.addRow(item)
-
-    def hide_left_list(self):
-        self.personal_list.Hide()
-        self.teaching_list.Hide()
+                self.teaching_list.addRow(list(item))
 
     def on_left_list_selected(self, evt):
         self.inst_list.DeleteAllItems()
+        self.inst_list.data.clear()
         key_id = evt.GetText()
 
         if self.radio.focus == '个人':
@@ -777,8 +784,8 @@ class vdi_network_panel(wx.Panel):
         sbSizer1 = wx.StaticBoxSizer(wx.StaticBox(p1, wx.ID_ANY, "修改子网掩码"), wx.VERTICAL)
         p1.Add(sbSizer1, 0, wx.EXPAND | wx.ALL, 5)
 
-        self.lc_subnet = mListCtrl(p1, ['uuid', 'name', 'cidr'], border=False,
-                                   method=self.on_subnet_popmenu, popupmemu=['修改子网'])
+        self.lc_subnet = mListCtrl(p1, ['uuid', 'name', 'cidr'])
+        self.lc_subnet.SetPopupMenu(['修改子网'],self.on_subnet_popmenu)
         self.lc_subnet.SetColumnWidth(0, 120)
         self.lc_subnet.SetColumnWidth(2, 120)
         sbSizer1.Add(self.lc_subnet, 1, wx.EXPAND)
@@ -794,6 +801,7 @@ class vdi_network_panel(wx.Panel):
 
     def refresh(self, evt):
         self.lc_subnet.DeleteAllItems()
+        self.lc_subnet.data.clear()
         try:
             re = self.vdi_db.cmd('select uuid,name,cidr from thor_console.subnets where deleted=0')
         except Exception as e:

@@ -169,10 +169,12 @@ class create_connect(wx.Dialog):
 
 class sshclient_list(mListCtrl):
     def __init__(self, parent, cols):
-        mListCtrl.__init__(self, parent, cols, method=self.on_linklist_popupmenu,
-                           popupmemu=['新建', '另存', '编辑', '删除'])
+        mListCtrl.__init__(self, parent, cols)
         self.popupmemu = []
         self.list = []
+        method = self.on_linklist_popupmenu,
+        popupmemu = ['新建', '另存', '编辑', '删除']
+        self.SetPopupMenu(popupmemu,method)
         self.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnLinkSelect)
         self.Bind(wx.EVT_LIST_ITEM_DESELECTED, self.OnLinkDeSelect)
 

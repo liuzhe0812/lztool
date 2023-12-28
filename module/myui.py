@@ -250,51 +250,36 @@ class mRadio(wx.BoxSizer):
 
 
 class mListCtrl(wx.ListCtrl, listmix.TextEditMixin, listmix.ListCtrlAutoWidthMixin):
-    def __init__(self, parent, colnames=None, size=(-1, -1), border=False, editable=False,
-                 method=None, popupmemu=[]):
+    def __init__(self, parent, colnames=None, size=(-1, -1), border=False, editable=False,searchctrl=False):
         if border:
             wx.ListCtrl.__init__(self, parent, -1, style=wx.LC_REPORT, size=size)
         else:
             wx.ListCtrl.__init__(self, parent, -1, style=wx.LC_REPORT | wx.NO_BORDER, size=size)
         if editable:
             listmix.TextEditMixin.__init__(self)
+        if searchctrl:
+            self.search_ctrl = wx.SearchCtrl(parent, style=wx.TE_PROCESS_ENTER)
+            self.search_ctrl.Bind(wx.EVT_TEXT, self.on_search)
+
         self.item = None  # 当前选中
+        self.data = []
+        self.col_count = len(colnames)
+        self.reverse = False  #列表排序：false正序
+        self.last_click_col = None
 
         listmix.ListCtrlAutoWidthMixin.__init__(self)
 
-        for i in range(len(colnames)):
+        for i in range(self.col_count):
             self.InsertColumn(i, colnames[i])
         self.Bind(wx.EVT_LIST_ITEM_FOCUSED, self.on_focus)
+        self.Bind(wx.EVT_LIST_COL_CLICK, self.on_column_click)
 
-        if method:
-            self.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, self.SetPopupMenu)
-            self.method = method
-            self.popupmenu_text = popupmemu
+    def SetPopupMenu(self, menus,method):
+        self.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, self.onItemRightClick)
+        self.method = method
+        self.popupmenu_text = menus
 
-    def on_focus(self, evt):
-        # self.focus = evt.GetText()
-        self.item = self.GetFocusedItem()
-
-    def getItemData(self, col):
-        return self.GetItemText(self.item, col)
-
-    def addRow(self, item, color=None):
-        i = self.GetItemCount()
-        try:
-            id = self.InsertItem(i, str(item[0]))
-        except:
-            id = self.InsertItem(i, item[0])
-        num = len(item)
-        for i in range(num):
-            if i > 0:
-                try:
-                    self.SetItem(id, i, item[i])
-                except:
-                    self.SetItem(id, i, str(item[i]))
-        if color:
-            self.SetItemTextColour(id, color)
-
-    def SetPopupMenu(self, evt):
+    def onItemRightClick(self,evt):
         self.popupmenu = wx.Menu()
         for text in self.popupmenu_text:
             item = self.popupmenu.Append(-1, text)
@@ -306,6 +291,54 @@ class mListCtrl(wx.ListCtrl, listmix.TextEditMixin, listmix.ListCtrlAutoWidthMix
         pos = self.ScreenToClient(pos)
         self.PopupMenu(self.popupmenu, pos)
 
+    def on_focus(self, evt):
+        self.item = self.GetFocusedItem()
+
+    def on_column_click(self,event):
+        col = event.GetColumn()
+        if col == self.last_click_col:
+            self.reverse = not self.reverse
+        data = sorted(self.data, key=lambda x: x[col],reverse=self.reverse)
+        self.DeleteAllItems()
+        for i, item in enumerate(data):
+            self.showItem(i, item)
+        self.last_click_col = col
+
+    def on_search(self, event):
+        self.DeleteAllItems()
+        search_text = self.search_ctrl.GetValue().lower()
+        index = 0
+        for i in range(len(self.data)):
+            for col in range(self.GetColumnCount()):
+                item_text = self.data[i][col].lower()
+                if search_text in item_text:
+                    self.showItem(index, self.data[i])
+                    index += 1
+                    break
+
+    def getItemData(self, col):
+        return self.GetItemText(self.item, col)
+
+    def addRow(self, item, color=None):
+        i = self.GetItemCount()
+        if not isinstance(item[0],str):
+            item[0] = str(item[0])
+        idx = self.InsertItem(i, item[0])
+        num = len(item)
+        for i in range(num):
+            if i > 0:
+                try:
+                    self.SetItem(idx, i, item[i])
+                except:
+                    self.SetItem(idx, i, str(item[i]))
+        if color:
+            self.SetItemTextColour(idx, color)
+        self.data.append(item)
+
+    def showItem(self,index,item):
+        self.InsertItem(index, item[0])
+        for i in range(self.col_count)[1:]:
+            self.SetItem(index, i, item[i])
 
 class mHyperTreeList(HTL.HyperTreeList):
     def __init__(self, parent, cols=None,
