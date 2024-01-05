@@ -1,7 +1,7 @@
 # encoding=utf-8
-import os, configparser, shutil, re, time, wx.adv, logging
+import os, configparser, shutil, re, time, wx.adv, logging,threadpool
 from _thread import start_new_thread
-from module import methods
+from module import methods,ssh
 from module.myui import *
 import module.widgets.filebrowsebutton as filebrowse
 
@@ -2009,3 +2009,131 @@ class system_moniter(wx.Frame):
     def on_close(self, evt):
         self.MONITER_STAT = False
         self.Destroy()
+
+class gfs_moniter(wx.Frame):
+    def __init__(self, parent, title,vdi_db):
+        wx.Frame.__init__(self, parent=parent, title=title,
+                          style=wx.DEFAULT_FRAME_STYLE & ~(wx.MINIMIZE_BOX | wx.MAXIMIZE_BOX))
+
+        self.vdi_db = vdi_db
+        self.host_brick_map = {}
+        self.brick_index_map = {}
+        self.parent = parent
+
+        self.SetBackgroundColour('white')
+        self.SetIcon(wx.Icon('bitmaps/bt_moniter.png'))
+        self.init_frame()
+
+    def init_frame(self):
+        sizer1 = wx.BoxSizer(wx.VERTICAL)
+        sizer2 = wx.BoxSizer(wx.HORIZONTAL)
+        self.SetSizer(sizer1)
+
+        col_name = ['节点IP',
+                    '节点名',
+                    '缓存盘',
+                    'brick',
+                    'bcache_dev',
+                    '缓存数据',
+                    '可用空间',
+                    '命中率',
+                    '回写阈值',
+                    '挂载点']
+        self.lc_bcache = mListCtrl(self,col_name,searchctrl=True)
+        self.lc_bcache.SetColumnWidth(1,100)
+        self.lc_bcache.SetColumnWidth(2,100)
+
+        sizer2.Add(self.lc_bcache.search_ctrl, 0)
+        sizer2.Add((-1,-1), 1)
+
+        self.ai = wx.ActivityIndicator(self,size=(25,25))
+        sizer2.Add(self.ai, 0,wx.RIGHT,10)
+        self.ai.Hide()
+
+        bt_refresh = mButton(self,'刷新','blue',size=(40,23))
+        bt_refresh.Bind(wx.EVT_BUTTON,self.refresh)
+
+        sizer2.Add(bt_refresh, 0)
+        sizer1.Add(sizer2,0,wx.EXPAND|wx.RIGHT|wx.LEFT,10)
+        sizer1.Add(self.lc_bcache,1,wx.EXPAND)
+
+        self.Layout()
+
+        self.SetSize(self.GetBestSize() + (20, 20))
+        self.Centre()
+
+        start_new_thread(self.init_lc_bcache,())
+
+    def refresh(self,evt):
+        self.ai.Show()
+        self.Layout()
+        self.ai.Start()
+        start_new_thread(self.init_lc_bcache,())
+
+    def init_lc_bcache(self):
+        self.host_brick_map.clear()
+        self.brick_index_map.clear()
+        self.lc_bcache.DeleteAllItems()
+        self.lc_bcache.data.clear()
+        res = self.vdi_db.get_bcache_info()
+        if not res:
+            mMessageBox('未获取到数据')
+            return
+        ip_list = []
+
+        idx = 0
+        for item in res:
+            item = list(item)
+            self.lc_bcache.data.append([item[0],item[1],item[2],item[3],'','','','','',''])
+            if item[0] not in ip_list:
+                ip_list.append(item[0])
+                self.host_brick_map[item[0]] = []   # [sda,sdb...]
+                self.brick_index_map[item[0]] = {}  # sda : lc.data.idx
+            brick_name = item[3].split('/dev/')[1]
+            self.brick_index_map[item[0]][brick_name] = idx
+            self.host_brick_map[item[0]].append(brick_name)
+            idx+=1
+
+        pool = threadpool.ThreadPool(globals.max_thread)
+        requests = threadpool.makeRequests(self.get_bcache_info, ip_list)
+        [pool.putRequest(req) for req in requests]
+        pool.wait()
+        self.ai.Stop()
+        self.ai.Hide()
+        self.lc_bcache.init_from_data()
+
+    def get_bcache_info(self,ip):
+        conn = ssh.sshClient(host_ip=ip)
+        conn.username = globals.vdi_user
+        conn.password = globals.vdi_user_pwd
+        conn.connect()
+        res = conn.recv("lsblk -o NAME,MOUNTPOINT;echo '---split---';cat /sys/block/bcache*/bcache/dirty_data;echo '---split---';cat /sys/block/bcache*/bcache/cache/cache_available_percent;echo '---split---';cat /sys/block/bcache*/bcache/cache/stats_hour/cache_hit_ratio;echo '---split---';cat /sys/block/bcache*/bcache/writeback_percent")
+        conn.close()
+        res = res.split('---split---')
+        blkinfo = res[0].split('\n')[1:]
+        blkinfo = [b.strip() for b in blkinfo]
+        dirty_data = res[1].strip().split('\n')
+        available = res[2].strip().split('\n')
+        hit_ratio = res[3].strip().split('\n')
+        writeback_percent = res[4].strip().split('\n')
+
+        bcache_index_map = {}
+
+        for brick in self.host_brick_map[ip]:
+            idx = blkinfo.index(brick)
+            bcache_info = blkinfo[idx + 1].split()
+            bcachename = bcache_info[0][2:]
+            mountpoint = bcache_info[1]
+            index = self.brick_index_map[ip][brick]
+            self.lc_bcache.data[index][4]=bcachename
+            self.lc_bcache.data[index][9]=mountpoint
+            bcache_index_map[bcachename] = index
+
+
+        for bcache in bcache_index_map.keys():
+            bcache_idx = int(bcache.split('bcache')[1])
+            index = bcache_index_map[bcache]
+            self.lc_bcache.data[index][5] = dirty_data[bcache_idx]
+            self.lc_bcache.data[index][6] = available[bcache_idx]
+            self.lc_bcache.data[index][7] = hit_ratio[bcache_idx]
+            self.lc_bcache.data[index][8] = writeback_percent[bcache_idx]

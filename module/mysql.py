@@ -184,6 +184,11 @@ class vdi_db:
         cmd = "select host,volume_id from cinder.image_volume_cache_entries where image_id='%s' order by id" % image_id
         return self.cmd(cmd)
 
+    def get_bcache_info(self):
+        '所有有cache的brick磁盘信息'
+        cmd = "select b.ip,b.hostname,c.`name`,a.name from thor_console.glusterfs_storage_device as a INNER JOIN thor_console.host_extra as b INNER JOIN thor_console.glusterfs_cache_device as c where a.node_id=b.id and a.deleted=0 and a.cache_id=c.id ORDER BY b.hostname,c.`name`"
+        return self.cmd(cmd)
+
     def disconnect(self):
         self.cur.close()
         self.conn.close()

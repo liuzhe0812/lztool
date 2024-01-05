@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-import logging
-
-import wx.grid, wx.aui, webbrowser, pyperclip, base64
+import wx.grid, wx.aui, webbrowser, pyperclip, base64,re,logging
 from .myui import *
 from module import mysql, ssh, methods, dialogs, globals
 from wx.html2 import WebView
+from module.dialogs import gfs_moniter
 
 
 class login_panel(wx.Panel):
@@ -23,7 +22,7 @@ class login_panel(wx.Panel):
         self.tc_server = mInput(self, st_label='主控IP', tc_size=(120, 23), st_size=(80, 23))
         self.bt_connect = mButton(self, '连接', color='blue', size=(45, 23), font_size=10)
         self.bt_connect.Bind(wx.EVT_BUTTON, self.on_connect)
-        self.tc_server.tc.SetValue('172.31.13.51')
+        self.tc_server.tc.SetValue('172.30.1.1')
         bSizer1.Add(self.tc_server, 0, wx.LEFT | wx.TOP, 50)
         bSizer1.Add((0, 10), 0)
         bSizer1.Add(self.bt_connect, 0, wx.TOP, 50)
@@ -104,6 +103,10 @@ class vdi_server_panel(wx.Panel):
         bSizerall = wx.BoxSizer(wx.VERTICAL)
         bSizer1 = wx.BoxSizer(wx.HORIZONTAL)
 
+        self.bt_gfs = mButton(self, 'Bcache监控', color='blue', size=(100, 23), font_size=10)
+        self.bt_gfs.Bind(wx.EVT_BUTTON, self.gfs_scan)
+        bSizer1.Add(self.bt_gfs, 0, wx.LEFT, 5)
+
         bSizer1.Add((0, 0), 1)
 
         self.bt_refresh = mButton(self, '刷新', color='blue', size=(40, 23), font_size=10)
@@ -134,6 +137,11 @@ class vdi_server_panel(wx.Panel):
         self.Centre(wx.BOTH)
         self.Layout()
 
+    def gfs_scan(self,evt):
+        frm = gfs_moniter(self, self.vdi_db.host, self.vdi_db)
+        frm.Show()
+        frm.Raise()
+
     def get_all_servers_conn(self):
         if self.console_is_compute:
             conn_list = list(self.compute_conn_dic.values())
@@ -148,7 +156,6 @@ class vdi_server_panel(wx.Panel):
             if conn.idx in ids:
                 conn_list.append(conn)
         return conn_list
-
 
     def set_server_task_state(self, idx, state):
         self.lc_server.SetStringItem(idx, 3, state)
@@ -227,6 +234,8 @@ class vdi_server_panel(wx.Panel):
 
             self.compute_conn_dic[item[0]] = conn
             btp.conn = conn
+
+
 
     def on_ssh(self, evt):
         item = evt.GetEventObject()

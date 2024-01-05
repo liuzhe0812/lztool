@@ -304,6 +304,11 @@ class mListCtrl(wx.ListCtrl, listmix.TextEditMixin, listmix.ListCtrlAutoWidthMix
             self.showItem(i, item)
         self.last_click_col = col
 
+    def init_from_data(self):
+        self.DeleteAllItems()
+        for i, item in enumerate(self.data):
+            self.showItem(i, item)
+
     def on_search(self, event):
         self.DeleteAllItems()
         search_text = self.search_ctrl.GetValue().lower()
@@ -334,6 +339,7 @@ class mListCtrl(wx.ListCtrl, listmix.TextEditMixin, listmix.ListCtrlAutoWidthMix
         if color:
             self.SetItemTextColour(idx, color)
         self.data.append(item)
+
 
     def showItem(self,index,item):
         self.InsertItem(index, item[0])
